@@ -248,6 +248,10 @@ missing-argument = "error"
 [tool.mypy]
 cache_dir = ".cache/mypy"
 
+[[tool.mypy.overrides]]
+module = ["harmonyhub.*", "homekit.*", "fritzctl.*"]
+ignore_missing_imports = true
+
 [tool.coverage.run]
 branch = true
 source = ["pantau"]

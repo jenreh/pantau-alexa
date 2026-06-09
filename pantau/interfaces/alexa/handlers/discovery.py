@@ -1,0 +1,173 @@
+"""Alexa.Discovery handler — returns all configured devices as Alexa endpoints."""
+
+from __future__ import annotations
+
+import logging
+
+from pantau.commands.discover_devices import DiscoverDevicesCommand, DiscoveredDevice
+from pantau.interfaces.alexa.models import AlexaDirectiveRequest
+from pantau.interfaces.alexa.response_builder import build_discovery_response
+
+log = logging.getLogger(__name__)
+
+_ALEXA_BASE = {"type": "AlexaInterface", "interface": "Alexa", "version": "3"}
+
+
+def _power_capability() -> dict:
+    return {
+        "type": "AlexaInterface",
+        "interface": "Alexa.PowerController",
+        "version": "3",
+        "properties": {
+            "supported": [{"name": "powerState"}],
+            "proactivelyReported": False,
+            "retrievable": False,
+        },
+    }
+
+
+def _speaker_capability() -> dict:
+    return {
+        "type": "AlexaInterface",
+        "interface": "Alexa.Speaker",
+        "version": "3",
+        "properties": {
+            "supported": [{"name": "volume"}, {"name": "muted"}],
+            "proactivelyReported": False,
+            "retrievable": False,
+        },
+    }
+
+
+def _thermostat_capability() -> dict:
+    return {
+        "type": "AlexaInterface",
+        "interface": "Alexa.ThermostatController",
+        "version": "3",
+        "properties": {
+            "supported": [{"name": "targetSetpoint"}],
+            "proactivelyReported": False,
+            "retrievable": False,
+        },
+        "configuration": {
+            "supportedModes": ["HEAT"],
+            "supportsScheduling": False,
+        },
+    }
+
+
+def _range_capability() -> dict:
+    return {
+        "type": "AlexaInterface",
+        "interface": "Alexa.RangeController",
+        "instance": "Blind.Position",
+        "version": "3",
+        "properties": {
+            "supported": [{"name": "rangeValue"}],
+            "proactivelyReported": False,
+            "retrievable": False,
+        },
+        "capabilityResources": {
+            "friendlyNames": [
+                {"@type": "asset", "value": {"assetId": "Alexa.Setting.Opening"}}
+            ]
+        },
+        "configuration": {
+            "supportedRange": {"minimumValue": 0, "maximumValue": 100, "precision": 1},
+            "unitOfMeasure": "Alexa.Unit.Percent",
+        },
+        "semantics": {
+            "actionMappings": [
+                {
+                    "@type": "ActionsToDirective",
+                    "actions": ["Alexa.Actions.Close"],
+                    "directive": {
+                        "name": "SetRangeValue",
+                        "payload": {"rangeValue": 0},
+                    },
+                },
+                {
+                    "@type": "ActionsToDirective",
+                    "actions": ["Alexa.Actions.Open"],
+                    "directive": {
+                        "name": "SetRangeValue",
+                        "payload": {"rangeValue": 100},
+                    },
+                },
+                {
+                    "@type": "ActionsToDirective",
+                    "actions": ["Alexa.Actions.Lower"],
+                    "directive": {
+                        "name": "AdjustRangeValue",
+                        "payload": {
+                            "rangeValueDelta": -10,
+                            "rangeValueDeltaDefault": False,
+                        },
+                    },
+                },
+                {
+                    "@type": "ActionsToDirective",
+                    "actions": ["Alexa.Actions.Raise"],
+                    "directive": {
+                        "name": "AdjustRangeValue",
+                        "payload": {
+                            "rangeValueDelta": 10,
+                            "rangeValueDeltaDefault": False,
+                        },
+                    },
+                },
+            ],
+            "stateMappings": [
+                {
+                    "@type": "StatesToValue",
+                    "states": ["Alexa.States.Closed"],
+                    "value": 0,
+                },
+                {
+                    "@type": "StatesToRange",
+                    "states": ["Alexa.States.Open"],
+                    "range": {"minimumValue": 1, "maximumValue": 100},
+                },
+            ],
+        },
+    }
+
+
+_CAPABILITY_BY_KIND = {
+    "power": (_power_capability, "TV", "TV-Kanal"),
+    "speaker": (_speaker_capability, "SPEAKER", "TV-Lautsprecher"),
+    "thermostat": (_thermostat_capability, "THERMOSTAT", "Heizungsthermostat"),
+    "range": (_range_capability, "INTERIOR_BLIND", "Rollo / Jalousie"),
+}
+
+
+def _build_endpoint(device: DiscoveredDevice) -> dict | None:
+    entry = _CAPABILITY_BY_KIND.get(device.capability)
+    if entry is None:
+        log.warning(
+            "DiscoveryHandler: unknown capability %r for device %s — skipped",
+            device.capability,
+            device.id,
+        )
+        return None
+    cap_factory, category, description = entry
+    return {
+        "endpointId": device.id,
+        "friendlyName": device.friendly_name,
+        "description": description,
+        "manufacturerName": "pantau",
+        "displayCategories": [category],
+        "cookie": {},
+        "capabilities": [cap_factory(), _ALEXA_BASE],
+    }
+
+
+class DiscoveryHandler:
+    def __init__(self, discover_devices: DiscoverDevicesCommand) -> None:
+        self._discover_devices = discover_devices
+
+    async def handle(self, _req: AlexaDirectiveRequest) -> dict:
+        devices = await self._discover_devices.execute()
+        endpoints = [e for d in devices if (e := _build_endpoint(d)) is not None]
+        log.info("DiscoveryHandler: returning %d endpoints", len(endpoints))
+        return build_discovery_response(endpoints)

@@ -7,13 +7,31 @@ FastAPI dependency injection.
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import Protocol, TypeVar, cast, runtime_checkable
 
 from pantau.adapters.fritz_thermostat_adapter import FritzThermostatAdapter
 from pantau.adapters.harmony_tv_adapter import HarmonyTvAdapter
 from pantau.adapters.homekit_blind_adapter import HomeKitBlindAdapter
+from pantau.adapters.mock_blind_adapter import MockBlindAdapter
+from pantau.adapters.mock_thermostat_adapter import MockThermostatAdapter
+from pantau.adapters.mock_tv_adapter import MockTvAdapter
 from pantau.adapters.yaml_device_registry import YamlDeviceRegistry
+from pantau.commands.blinds.adjust_blind_position import AdjustBlindPositionCommand
+from pantau.commands.blinds.set_blind_position import SetBlindPositionCommand
+from pantau.commands.discover_devices import DiscoverDevicesCommand
+from pantau.commands.heating.set_thermostat_temperature import (
+    SetThermostatTemperatureCommand,
+)
+from pantau.commands.tv.activate_channel import ActivateChannelCommand
+from pantau.commands.tv.set_tv_mute import SetTvMuteCommand
 from pantau.config.settings import Settings
+from pantau.interfaces.alexa.handlers.discovery import DiscoveryHandler
+from pantau.interfaces.alexa.handlers.power import PowerHandler
+from pantau.interfaces.alexa.handlers.range import RangeHandler
+from pantau.interfaces.alexa.handlers.speaker import SpeakerHandler
+from pantau.interfaces.alexa.handlers.thermostat import ThermostatHandler
+from pantau.interfaces.alexa.router import AlexaDirectiveRouter
 from pantau.ports.blind_port import BlindPort
 from pantau.ports.device_registry_port import DeviceRegistryPort
 from pantau.ports.thermostat_port import ThermostatPort
@@ -68,10 +86,70 @@ def build_container(settings: Settings) -> Container:
     registry = YamlDeviceRegistry(settings.devices_config_path)
     harmony_host = registry.get_registry().tv.harmony_host
     log.info("Building dependency container (real adapters, hub=%s)", harmony_host)
-    return (
+
+    container = (
         Container()
-        .register(DeviceRegistryPort, registry)
-        .register(TvPort, HarmonyTvAdapter(harmony_host))
-        .register(BlindPort, HomeKitBlindAdapter())
-        .register(ThermostatPort, FritzThermostatAdapter())
+        .register(DeviceRegistryPort, registry)  # type: ignore[type-abstract]
+        .register(TvPort, HarmonyTvAdapter(harmony_host))  # type: ignore[type-abstract]
+        .register(BlindPort, HomeKitBlindAdapter())  # type: ignore[type-abstract]
+        .register(ThermostatPort, FritzThermostatAdapter())  # type: ignore[type-abstract]
     )
+
+    _wire_commands_and_router(container)
+    return container
+
+
+def _wire_commands_and_router(container: Container) -> None:
+    """Instantiate commands as singletons and wire the Alexa directive router."""
+    registry_port = container.get(DeviceRegistryPort)  # type: ignore[type-abstract]
+    tv_port = container.get(TvPort)  # type: ignore[type-abstract]
+    blind_port = container.get(BlindPort)  # type: ignore[type-abstract]
+    thermostat_port = container.get(ThermostatPort)  # type: ignore[type-abstract]
+
+    # Commands — singletons so SetTvMuteCommand preserves assumed mute state
+    activate_channel = ActivateChannelCommand(registry_port, tv_port)
+    set_mute = SetTvMuteCommand(registry_port, tv_port)
+    set_temperature = SetThermostatTemperatureCommand(registry_port, thermostat_port)
+    set_blind = SetBlindPositionCommand(registry_port, blind_port)
+    adjust_blind = AdjustBlindPositionCommand(registry_port, blind_port)
+    discover = DiscoverDevicesCommand(registry_port)
+
+    container.register(ActivateChannelCommand, activate_channel)
+    container.register(SetTvMuteCommand, set_mute)
+    container.register(SetThermostatTemperatureCommand, set_temperature)
+    container.register(SetBlindPositionCommand, set_blind)
+    container.register(AdjustBlindPositionCommand, adjust_blind)
+    container.register(DiscoverDevicesCommand, discover)
+
+    # Handlers
+    power_handler = PowerHandler(activate_channel)
+    speaker_handler = SpeakerHandler(set_mute)
+    thermostat_handler = ThermostatHandler(set_temperature)
+    range_handler = RangeHandler(set_blind, adjust_blind)
+    discovery_handler = DiscoveryHandler(discover)
+
+    # Alexa directive router
+    alexa_router = AlexaDirectiveRouter(
+        power=power_handler,
+        speaker=speaker_handler,
+        thermostat=thermostat_handler,
+        range_=range_handler,
+        discovery=discovery_handler,
+    )
+    container.register(AlexaDirectiveRouter, alexa_router)
+    log.info("Alexa directive router wired with %d directives", alexa_router.directive_count)
+
+
+def build_test_container(devices_config_path: Path) -> Container:
+    """Build a container with mock adapters — for integration tests only."""
+    registry = YamlDeviceRegistry(devices_config_path)
+    log.debug("Building test container (mock adapters)")
+    container = (
+        Container()
+        .register(DeviceRegistryPort, registry)  # type: ignore[type-abstract]
+        .register(TvPort, MockTvAdapter())  # type: ignore[type-abstract]
+        .register(BlindPort, MockBlindAdapter())  # type: ignore[type-abstract]
+        .register(ThermostatPort, MockThermostatAdapter())  # type: ignore[type-abstract]
+    )
+    _wire_commands_and_router(container)
+    return container

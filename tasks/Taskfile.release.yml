@@ -5,8 +5,8 @@ version: "3"
 silent: true
 
 vars:
-  PROJECT: Alloq
-  IMAGE_NAME: alloq
+  PROJECT: pantau-alexa
+  IMAGE_NAME: pantau-alexa
   RUNNER: uv run
 
 tasks:

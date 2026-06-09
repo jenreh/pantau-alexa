@@ -11,17 +11,23 @@ from fastapi.responses import JSONResponse
 
 from pantau.composition import Container, build_container
 from pantau.config.settings import Settings, get_settings
+from pantau.interfaces.alexa.directive_router import alexa_router
 from pantau.ports.device_registry_port import DeviceRegistryPort
 
 log = logging.getLogger(__name__)
 
 
-def create_app(settings: Settings | None = None) -> FastAPI:
+def create_app(
+    settings: Settings | None = None,
+    container: Container | None = None,
+) -> FastAPI:
     """Create and configure the FastAPI application."""
     if settings is None:
-        settings = get_settings()
+        # Only load from environment when building the container ourselves
+        settings = get_settings() if container is None else Settings()
 
-    container = build_container(settings)
+    if container is None:
+        container = build_container(settings)
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):  # type: ignore[return]
@@ -49,11 +55,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
 
 def _register_routes(app: FastAPI) -> None:
+    app.include_router(alexa_router)
+
     @app.get("/health", tags=["system"])
     async def health() -> JSONResponse:
         """Health check — returns 200 when the server is up."""
         container: Container = app.state.container
-        registry = container.get(DeviceRegistryPort).get_registry()
+        registry = container.get(DeviceRegistryPort).get_registry()  # type: ignore[type-abstract]
         return JSONResponse(
             {
                 "status": "ok",
