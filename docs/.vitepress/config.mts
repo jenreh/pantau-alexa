@@ -25,6 +25,7 @@ export default withMermaid({
             { text: "What is pantau-alexa?", link: "/guide/" },
             { text: "Getting Started", link: "/guide/getting-started" },
             { text: "Configuration Reference", link: "/guide/configuration" },
+            { text: "CLI Reference", link: "/guide/cli" },
           ],
         },
       ],

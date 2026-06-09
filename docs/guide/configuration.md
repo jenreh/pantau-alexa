@@ -114,8 +114,15 @@ Settings are loaded from environment variables or a `.env` file in the project r
 ### OAuth
 
 | Variable | Default | Description |
-|---|---|---|
-| `OAUTH_ALLOWED_REDIRECT_URIS` | *(empty list)* | Comma-separated list of permitted redirect URIs. **Empty = allow any (dev mode only).** Set this in production. |
+| --- | --- | --- |
+| `OAUTH_ALLOWED_REDIRECT_URIS` | *(empty list)* | Comma-separated list of permitted redirect URIs. **Must be set in production** — see below. |
+| `DEV_MODE` | `false` | When `true`, an empty `OAUTH_ALLOWED_REDIRECT_URIS` list accepts any redirect URI (dev convenience). **Never set in production.** |
+
+::: warning Fail-closed allowlist
+When `OAUTH_ALLOWED_REDIRECT_URIS` is empty **and** `DEV_MODE` is `false`, every request to `GET /oauth/authorize` and `POST /oauth/authorize` returns **503 Service Unavailable**. This is intentional — a misconfigured production server must fail loudly rather than silently accept any redirect URI.
+
+For local development without a fixed redirect URI, set `PANTAU_DEV_MODE=true` in your `.env`.
+:::
 
 ### Storage
 
