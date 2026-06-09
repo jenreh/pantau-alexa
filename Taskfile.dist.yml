@@ -12,16 +12,16 @@ includes:
   docs:
     taskfile: ./taskfiles/Taskfile.docs.yml
     dir: .
-  dev:
-    taskfile: ./tasks/Taskfile.terraform-aws.yml
-    vars:
-      TF_DIR: "{{.ROOT_DIR}}/terraform"
-      ENVIRONMENT: dev
-  prod:
-    taskfile: ./tasks/Taskfile.terraform-aws.yml
-    vars:
-      TF_DIR: "{{.ROOT_DIR}}/terraform"
-      ENVIRONMENT: prod
+  # dev:
+  #   taskfile: ./tasks/Taskfile.terraform-aws.yml
+  #   vars:
+  #     TF_DIR: "{{.ROOT_DIR}}/terraform"
+  #     ENVIRONMENT: dev
+  # prod:
+  #   taskfile: ./tasks/Taskfile.terraform-aws.yml
+  #   vars:
+  #     TF_DIR: "{{.ROOT_DIR}}/terraform"
+  #     ENVIRONMENT: prod
 
 silent: true
 
