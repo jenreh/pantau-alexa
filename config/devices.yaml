@@ -1,0 +1,63 @@
+# Device registry — configure all controllable devices here.
+# Adding a new channel or device requires only config changes (no code change).
+#
+# IMPORTANT: Set harmony_host, watch_activity, and fritz_name to match your setup.
+
+tv:
+  harmony_host: "192.168.178.50"  # LAN IP of the Harmony Hub
+  watch_activity: "Fernseher"     # Harmony activity name that switches on the TV
+
+  audio:
+    id: "tv-audio"
+    friendly_name: "Fernseher"    # "schalte den Fernseher stumm" / "Ton ein"
+
+  channels:
+    # Each channel becomes a separate Alexa PowerController endpoint.
+    # "Alexa, schalte ZDF ein" → TurnOn on endpoint "zdf"
+    - id: "ard"
+      friendly_name: "ARD"
+      aliases: ["ARD", "Erstes", "Das Erste"]
+      channel_number: "1"
+    - id: "zdf"
+      friendly_name: "ZDF"
+      aliases: ["ZDF", "Zweites"]
+      channel_number: "2"
+    - id: "sat1"
+      friendly_name: "SAT.1"
+      aliases: ["SAT1", "Sat.1", "SAT 1"]
+      channel_number: "3"
+    - id: "pro7"
+      friendly_name: "ProSieben"
+      aliases: ["Pro7", "ProSieben", "Pro Sieben"]
+      channel_number: "4"
+
+blinds:
+  # Each blind/rollo is controlled via homekit-py (set_position 0–100).
+  # invert: true  → 0=fully open, 100=fully closed (use if your motor is inverted)
+  # invert: false → 0=fully closed, 100=fully open (HAP default)
+  - id: "kueche-rollo"
+    friendly_name: "Rollo Küche"
+    aliases: ["Küche", "Rollos Küche", "Küchen-Rollo"]
+    homekit_entity_id: "cover.kueche"
+    invert: false
+  - id: "wohnzimmer-rollo"
+    friendly_name: "Rollo Wohnzimmer"
+    aliases: ["Wohnzimmer Rollo", "Rollo Wohnzimmer"]
+    homekit_entity_id: "cover.wohnzimmer"
+    invert: false
+
+thermostats:
+  # Each thermostat is controlled via fritzctl-py (set_temperature in °C).
+  # fritz_name must match the device name as configured on the FRITZ!Box.
+  - id: "wohnzimmer-heizung"
+    friendly_name: "Heizung Wohnzimmer"
+    aliases: ["Wohnzimmer", "Heizung im Wohnzimmer", "Wohnzimmer Heizung"]
+    fritz_name: "Wohnzimmer"
+    min_celsius: 16.0
+    max_celsius: 24.0
+  - id: "schlafzimmer-heizung"
+    friendly_name: "Heizung Schlafzimmer"
+    aliases: ["Schlafzimmer", "Heizung im Schlafzimmer", "Schlafzimmer Heizung"]
+    fritz_name: "Schlafzimmer"
+    min_celsius: 15.0
+    max_celsius: 22.0

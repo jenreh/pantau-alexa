@@ -41,7 +41,7 @@
     "reportIncompatibleVariableOverride": false
   },
   "python.analysis.include": [
-    "app/**"
+    "pantau/**"
   ],
   "python.analysis.indexing": true,
   "python.analysis.inlayHints.pytestParameters": false,
@@ -50,7 +50,7 @@
   "python.analysis.inlayHints.functionReturnTypes": false,
   "python.analysis.inlayHints.variableTypes": false,
   "python.autoComplete.extraPaths": [
-    "app/**"
+    "pantau/**"
   ],
   "python.createEnvironment.contentButton": "show",
   "python.envFile": "${workspaceFolder}/.env",
@@ -88,8 +88,6 @@
     "https://taskfile.dev/schema.json": [
       "**/Taskfile.yml",
       "**/tasks/Taskfile.*.yml",
-      "file:///Users/jens/Workspace/projekte/python-kit/tasks/Taskfile.terraform.yaml",
-      "file:///Users/jens/Workspace/projekte/python-kit/tasks/Taskfile.terraform-azure.yaml"
     ]
   },
   "python-envs.defaultPackageManager": "ms-python.python:uv",

@@ -9,26 +9,24 @@ includes:
     vars:
       PROJECT: "{{.PROJECT}}"
   release: ./tasks/Taskfile.release.yml
-  # db: ./tasks/Taskfile.db.yml
-  # docker:
-  #   taskfile: ./tasks/Taskfile.docker.yml
-  #   vars:
-  #     IMAGE_NAME: "{{.PROJECT}}-image"
-  # dev:
-  #   taskfile: ./tasks/Taskfile.terraform-azure.yaml
-  #   vars:
-  #     TF_DIR: "{{.ROOT_DIR}}/terraform"
-  #     ENVIRONMENT: dev
-  # prod:
-  #   taskfile: ./tasks/Taskfile.terraform-azure.yaml
-  #   vars:
-  #     TF_DIR: "{{.ROOT_DIR}}/terraform"
-  #     ENVIRONMENT: prod
+  docs:
+    taskfile: ./taskfiles/Taskfile.docs.yml
+    dir: .
+  dev:
+    taskfile: ./tasks/Taskfile.terraform-aws.yml
+    vars:
+      TF_DIR: "{{.ROOT_DIR}}/terraform"
+      ENVIRONMENT: dev
+  prod:
+    taskfile: ./tasks/Taskfile.terraform-aws.yml
+    vars:
+      TF_DIR: "{{.ROOT_DIR}}/terraform"
+      ENVIRONMENT: prod
 
 silent: true
 
 vars:
-  PROJECT: app
+  PROJECT: pantau
 
 tasks:
   default:
@@ -67,6 +65,21 @@ tasks:
     desc: Clean cache and build artifacts
     ignore_error: true
     cmds:
-      - rm -rf __pycache__/ .cache/ .state/ .web/ dist/ build/ coverage.xml .coverage
+      - rm -rf __pycache__/ .cache/ .state/ dist/ build/ coverage.xml .coverage
       - find . -type d -name "__pycache__" -exec rm -rf {} +
       - find . -type f -name "*.pyc" -delete
+
+  # ----------------------------------------------------------------------------
+  # Run the server
+  # ----------------------------------------------------------------------------
+
+  release:publish:
+    desc: Build and publish all library modules to PyPI
+    cmds:
+      - uv build
+      - uv publish
+      - echo "✅ All modules published successfully"
+
+  run:
+    desc: Run the FastAPI server (development mode)
+    cmd: uv run uvicorn pantau.api.app:create_app --reload --factory --host 0.0.0.0 --port 8080

@@ -1,12 +1,12 @@
 [project]
-name = "app"
-version = "1.0.0"
-description = "Project template for python apps. Change as needed."
+name = "pantau-alexa"
+version = "0.0.1"
+description = "Alexa Smart Home Skill for home automation (TV, blinds, thermostats) via a self-hosted FastAPI server."
 readme = "README.md"
 requires-python = ">=3.14"
 license = { text = "MIT" }
 authors = [{ name = "Jens Rehpöhler" }]
-keywords = []
+keywords = ["alexa", "smart-home", "home-automation", "fastapi"]
 classifiers = [
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
@@ -16,42 +16,51 @@ classifiers = [
 ]
 
 dependencies = [
-    "fastmcp==3.3.1",
-    "typer==0.25.1",
-    "rich==15.0.0",
-    "pydantic==2.13.4",
-    "pydantic-settings==2.14.1",
+    "aiobotocore==3.7.0",
     "aiosqlite==0.22.1",
+    "boto3==1.43.25",
+    "fastapi==0.136.3",
+    "httpx==0.28.1",
+    "passlib[bcrypt]==1.7.4",
+    "pydantic-settings==2.14.1",
+    "pydantic==2.13.4",
+    "python-jose[cryptography]==3.5.0",
+    "pyyaml==6.0.3",
+    "uvicorn[standard]==0.49.0",
 ]
 
 [dependency-groups]
 dev = [
+    "boto3-stubs[s3]==1.43.25",
     "bump-my-version==1.3.0",
     "detect-secrets==1.5.0",
+    "httpx==0.28.1",
+    "mypy==2.1.0",
     "pre-commit==4.6.0",
-    "pytest==9.0.3",
-    "pytest-asyncio==1.3.0",
+    "pytest-asyncio==1.4.0",
     "pytest-cov==7.1.0",
     "pytest-httpserver==1.1.5",
-    "ruff==0.15.13",
-    "mypy==2.1.0",
+    "pytest==9.0.3",
+    "ruff==0.15.16",
+    "ty==0.0.46",
+    "types-passlib>=1.7.7",
     "types-PyYAML==6.0.12.20260510",
 ]
 
 [project.scripts]
-# app = "app.cli.main:app"
-# app-mcp = "app.mcp_server.server:main"
+pantau = "pantau.api.app:main"
 
 [project.urls]
-Homepage = "https://github.com/jenreh/python-kit"
-Repository = "https://github.com/jenreh/python-kit"
+Homepage = "https://github.com/jenreh/pantau-alexa"
+Repository = "https://github.com/jenreh/pantau-alexa"
 
 [tool.hatch.build.targets.wheel]
-packages = ["app"]
+packages = ["pantau"]
 
 [tool.hatch.build.targets.sdist]
 include = [
-    "/app",
+    "/pantau",
+    "/config",
     "README.md",
     "pyproject.toml",
 ]
@@ -62,7 +71,6 @@ exclude = [
     ".devcontainer/",
     ".github/",
     ".vscode/",
-    "skill/",
     "spec/",
     "tests/",
     ".env",
@@ -70,12 +78,12 @@ exclude = [
     ".pre-commit-config.yaml",
     "AGENTS.md",
     "coverage.xml",
-    "Taskfile.yaml",
+    "terraform/",
 ]
 
 [tool.bumpversion]
 commit = false
-current_version = "1.0.0"
+current_version = "0.0.1"
 tag = false
 allow-dirty = false
 
@@ -99,6 +107,8 @@ extend-exclude = [
     ".claude",
     ".devcontainer",
     ".github",
+    ".venv",
+    ".venv.mac",
     ".vscode",
     "build",
     "dist",
@@ -204,36 +214,46 @@ docstring-code-line-length = "dynamic"
 exclude = ["*.pyi"]
 
 [tool.ruff.lint.isort]
-known-local-folder = ["sonos"]
+known-local-folder = ["pantau"]
 
 [tool.pytest.ini_options]
 cache_dir = ".cache/pytest"
 testpaths = ["tests"]
 asyncio_mode = "auto"
 markers = [
-    "sonos_live: requires real Sonos hardware on the network",
+    "integration: requires real hardware on the network",
+    "aws: requires real AWS credentials",
 ]
 
-[tool.mypy]
-cache_dir = ".cache/mypy"
-disallow_untyped_defs = true
-incremental = true
-python_version = "3.14"
-warn_return_any = true
-warn_unused_configs = true
-ignore_missing_imports = true
+[tool.ty.environment]
+python-version = "3.14"
+
+[tool.ty.src]
 exclude = [
+    ".agents",
     ".cache",
     ".claude",
     ".venv",
     "build",
     "dist",
+    "examples",
+    "skill",
+    "tests/evals",
 ]
+
+[tool.ty.rules]
+unresolved-import = "warn"
+missing-argument = "error"
+
+[tool.mypy]
+cache_dir = ".cache/mypy"
 
 [tool.coverage.run]
 branch = true
-source = ["app"]
-omit = []
+source = ["pantau"]
+omit = [
+    "pantau/ports/*", # Protocol stubs — interface definitions only
+]
 
 [tool.coverage.report]
 exclude_lines = ["if TYPE_CHECKING:", "if __name__ == .__main__.:", "pragma: no cover"]
