@@ -10,7 +10,7 @@ from harmonyhub.exceptions import HubUnavailableError, ProtocolError
 from harmonyhub.service import HarmonyService
 
 from pantau.domain.errors import DeviceUnavailableError
-from pantau.domain.models import HarmonyActivity, HarmonyHubDevice
+from pantau.domain.models import Activity, HubDevice
 
 log = logging.getLogger(__name__)
 
@@ -98,16 +98,17 @@ class HarmonyTvAdapter:
         except (HubUnavailableError, ProtocolError) as exc:
             raise DeviceUnavailableError(str(exc)) from exc
 
-    async def list_activities(self) -> list[HarmonyActivity]:
-        """Return all configured Harmony Hub activities (equivalent to `harmony config`)."""
+    async def list_activities(self) -> list[Activity]:
+        """Return all configured Harmony Hub activities."""
         try:
             async with self._service_factory() as service:
                 activities = await service.client.list_activities()
                 log.debug("HarmonyTV: list_activities count=%d", len(activities))
                 return [
-                    HarmonyActivity(
+                    Activity(
                         id=a.id,
-                        label=a.label,
+                        name=a.label,
+                        adapter="harmony",
                         is_power_off=a.is_power_off,
                     )
                     for a in activities
@@ -115,16 +116,17 @@ class HarmonyTvAdapter:
         except (HubUnavailableError, ProtocolError) as exc:
             raise DeviceUnavailableError(str(exc)) from exc
 
-    async def list_devices(self) -> list[HarmonyHubDevice]:
+    async def list_devices(self) -> list[HubDevice]:
         """Return all physical devices registered on the Harmony Hub."""
         try:
             async with self._service_factory() as service:
                 devices = await service.client.list_devices()
                 log.debug("HarmonyTV: list_devices count=%d", len(devices))
                 return [
-                    HarmonyHubDevice(
+                    HubDevice(
                         id=d.id,
-                        label=d.label,
+                        name=d.label,
+                        adapter="harmony",
                         manufacturer=d.manufacturer,
                         model=d.model,
                     )

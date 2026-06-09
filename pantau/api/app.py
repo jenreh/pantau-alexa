@@ -107,13 +107,13 @@ def _register_routes(app: FastAPI) -> None:
                 base["error"] = r.error
             else:
                 base["activities"] = [
-                    {"id": a.id, "label": a.label, "is_power_off": a.is_power_off}
+                    {"id": a.id, "name": a.name, "is_power_off": a.is_power_off}
                     for a in r.activities
                 ]
                 base["devices"] = [
                     {
                         "id": d.id,
-                        "label": d.label,
+                        "name": d.name,
                         "manufacturer": d.manufacturer,
                         "model": d.model,
                     }
@@ -129,7 +129,7 @@ def _register_routes(app: FastAPI) -> None:
             else:
                 base["devices"] = [
                     {
-                        "entity_id": e.entity_id,
+                        "id": e.id,
                         "name": e.name,
                         "domain": e.domain,
                         "room": e.room,

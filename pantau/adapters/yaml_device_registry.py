@@ -8,12 +8,12 @@ from pathlib import Path
 import yaml
 
 from pantau.domain.models import (
-    BlindDevice,
-    ChannelDevice,
     DeviceRegistry,
-    ThermostatDevice,
-    TvAudioDevice,
-    TvConfig,
+    Thermostat,
+    Tv,
+    TvAudio,
+    TvChannel,
+    WindowBlind,
 )
 
 log = logging.getLogger(__name__)
@@ -36,15 +36,15 @@ class YamlDeviceRegistry:
     def get_registry(self) -> DeviceRegistry:
         return self._registry
 
-    def find_channel(self, endpoint_id: str) -> ChannelDevice | None:
+    def find_channel(self, endpoint_id: str) -> TvChannel | None:
         return next(
             (c for c in self._registry.tv.channels if c.id == endpoint_id), None
         )
 
-    def find_blind(self, endpoint_id: str) -> BlindDevice | None:
+    def find_blind(self, endpoint_id: str) -> WindowBlind | None:
         return next((b for b in self._registry.blinds if b.id == endpoint_id), None)
 
-    def find_thermostat(self, endpoint_id: str) -> ThermostatDevice | None:
+    def find_thermostat(self, endpoint_id: str) -> Thermostat | None:
         return next(
             (t for t in self._registry.thermostats if t.id == endpoint_id), None
         )
@@ -55,30 +55,33 @@ def _load(path: Path) -> DeviceRegistry:
         raw = yaml.safe_load(fh)
 
     tv_raw = raw["tv"]
-    audio = TvAudioDevice(
+    audio = TvAudio(
         id=tv_raw["audio"]["id"],
-        friendly_name=tv_raw["audio"]["friendly_name"],
+        name=tv_raw["audio"]["friendly_name"],
+        adapter="harmony",
     )
     channels = tuple(
-        ChannelDevice(
+        TvChannel(
             id=ch["id"],
-            friendly_name=ch["friendly_name"],
+            name=ch["friendly_name"],
+            adapter="harmony",
             aliases=tuple(ch.get("aliases", [])),
             channel_number=str(ch.get("channel_number", "")),
         )
         for ch in tv_raw.get("channels", [])
     )
-    tv = TvConfig(
+    tv = Tv(
         watch_activity=tv_raw["watch_activity"],
         audio=audio,
         channels=channels,
     )
 
     blinds = tuple(
-        BlindDevice(
+        WindowBlind(
             id=b["id"],
-            friendly_name=b["friendly_name"],
-            homekit_entity_id=b["homekit_entity_id"],
+            name=b["friendly_name"],
+            adapter="homekit",
+            external_id=b["homekit_entity_id"],
             aliases=tuple(b.get("aliases", [])),
             invert=bool(b.get("invert", False)),
         )
@@ -86,10 +89,11 @@ def _load(path: Path) -> DeviceRegistry:
     )
 
     thermostats = tuple(
-        ThermostatDevice(
+        Thermostat(
             id=t["id"],
-            friendly_name=t["friendly_name"],
-            fritz_name=t["fritz_name"],
+            name=t["friendly_name"],
+            adapter="fritz",
+            external_id=t["fritz_name"],
             aliases=tuple(t.get("aliases", [])),
             min_celsius=float(t.get("min_celsius", 8.0)),
             max_celsius=float(t.get("max_celsius", 28.0)),

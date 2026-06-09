@@ -3,16 +3,12 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
 from typing import Literal
 
+from pydantic import BaseModel, ConfigDict
+
 from pantau.domain.errors import DeviceUnavailableError
-from pantau.domain.models import (
-    FritzDevice,
-    HarmonyActivity,
-    HarmonyHubDevice,
-    HomeKitDevice,
-)
+from pantau.domain.models import Activity, HomeDevice, HubDevice, LiveThermostat
 from pantau.ports.blind_port import BlindPort
 from pantau.ports.thermostat_port import ThermostatPort
 from pantau.ports.tv_port import TvPort
@@ -22,30 +18,34 @@ log = logging.getLogger(__name__)
 BackendStatus = Literal["ok", "unavailable"]
 
 
-@dataclass
-class HarmonyResult:
+class HarmonyResult(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     status: BackendStatus
-    activities: list[HarmonyActivity] = field(default_factory=list)
-    devices: list[HarmonyHubDevice] = field(default_factory=list)
+    activities: list[Activity] = []
+    devices: list[HubDevice] = []
     error: str | None = None
 
 
-@dataclass
-class HomeKitResult:
+class HomeKitResult(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     status: BackendStatus
-    devices: list[HomeKitDevice] = field(default_factory=list)
+    devices: list[HomeDevice] = []
     error: str | None = None
 
 
-@dataclass
-class FritzResult:
+class FritzResult(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     status: BackendStatus
-    devices: list[FritzDevice] = field(default_factory=list)
+    devices: list[LiveThermostat] = []
     error: str | None = None
 
 
-@dataclass
-class ConnectedDevicesResult:
+class ConnectedDevicesResult(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     harmony: HarmonyResult
     homekit: HomeKitResult
     fritz: FritzResult

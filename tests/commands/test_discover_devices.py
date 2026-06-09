@@ -20,7 +20,7 @@ class TestDiscoverDevices:
         devices = await DiscoverDevicesCommand(registry).execute()
         speaker = next(d for d in devices if d.capability == "speaker")
         assert speaker.id == "tv-audio"
-        assert speaker.friendly_name == "Fernseher"
+        assert speaker.name == "Fernseher"
 
     async def test_returns_blinds_as_range(self, registry: YamlDeviceRegistry) -> None:
         devices = await DiscoverDevicesCommand(registry).execute()
@@ -39,8 +39,6 @@ class TestDiscoverDevices:
         # 2 channels + 1 audio + 2 blinds + 1 thermostat = 6
         assert len(devices) == 6
 
-    async def test_all_devices_have_friendly_names(
-        self, registry: YamlDeviceRegistry
-    ) -> None:
+    async def test_all_devices_have_names(self, registry: YamlDeviceRegistry) -> None:
         devices = await DiscoverDevicesCommand(registry).execute()
-        assert all(d.friendly_name for d in devices)
+        assert all(d.name for d in devices)

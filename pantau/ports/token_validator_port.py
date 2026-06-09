@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Protocol
 
+from pydantic import BaseModel, ConfigDict
 
-@dataclass(frozen=True, slots=True)
-class TokenClaims:
+
+class TokenClaims(BaseModel):
     """Validated claims extracted from a bearer token."""
+
+    model_config = ConfigDict(frozen=True)
 
     user_id: str
     scope: str

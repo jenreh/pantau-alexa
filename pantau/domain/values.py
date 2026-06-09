@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from enum import Enum
+
+from pydantic import BaseModel, ConfigDict, model_validator
 
 
 class MuteState(Enum):
@@ -13,35 +14,35 @@ class MuteState(Enum):
     UNMUTED = "unmuted"
 
 
-@dataclass(frozen=True, slots=True)
-class Temperature:
-    """Target temperature in Celsius, constrained to the FRITZ!Box-safe range."""
+class Temperature(BaseModel):
+    """Target temperature in Celsius (rounded to 0.5-step).
+
+    Range is not validated here; per-device min/max is enforced by the command layer
+    using ``Thermostat.min_celsius`` / ``Thermostat.max_celsius``.
+    """
+
+    model_config = ConfigDict(frozen=True)
 
     celsius: float
-
-    _MIN: float = 8.0
-    _MAX: float = 28.0
-
-    def __post_init__(self) -> None:
-        if not (self._MIN <= self.celsius <= self._MAX):
-            msg = f"Temperature {self.celsius}°C is outside the valid range {self._MIN}–{self._MAX}°C"
-            raise ValueError(msg)
 
     @classmethod
     def from_float(cls, value: float) -> Temperature:
         return cls(celsius=round(value * 2) / 2)  # round to 0.5-step
 
 
-@dataclass(frozen=True, slots=True)
-class Percentage:
+class Percentage(BaseModel):
     """A position value in percent (0–100), used for blind position."""
+
+    model_config = ConfigDict(frozen=True)
 
     value: int
 
-    def __post_init__(self) -> None:
+    @model_validator(mode="after")
+    def _validate_range(self) -> Percentage:
         if not (0 <= self.value <= 100):
             msg = f"Percentage {self.value} is outside the valid range 0–100"
             raise ValueError(msg)
+        return self
 
     @classmethod
     def half(cls) -> Percentage:

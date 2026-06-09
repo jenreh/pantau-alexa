@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from pantau.domain.models import HarmonyActivity, HarmonyHubDevice
+from pantau.domain.models import Activity, HubDevice
 
 
 class TvPort(Protocol):
@@ -26,10 +26,10 @@ class TvPort(Protocol):
         """Return the label of the currently active Harmony activity, or None."""
         ...
 
-    async def list_activities(self) -> list[HarmonyActivity]:
-        """Return all configured Harmony Hub activities (equivalent to `harmony config`)."""
+    async def list_activities(self) -> list[Activity]:
+        """Return all configured Harmony Hub activities."""
         ...
 
-    async def list_devices(self) -> list[HarmonyHubDevice]:
+    async def list_devices(self) -> list[HubDevice]:
         """Return all physical devices registered on the Harmony Hub."""
         ...

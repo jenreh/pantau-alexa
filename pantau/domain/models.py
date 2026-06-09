@@ -1,114 +1,116 @@
-"""Domain models — immutable data structures representing the home automation domain."""
+"""Domain models — Pydantic-based, adapter-agnostic home automation entities."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from pydantic import BaseModel, ConfigDict
 
 
-@dataclass(frozen=True, slots=True)
-class ChannelDevice:
-    """A TV channel exposed as an Alexa PowerController endpoint."""
+class Device(BaseModel):
+    """Base class for all domain devices.
+
+    ``adapter`` names the backend that owns this device (e.g. ``"homekit"``,
+    ``"harmony"``, ``"fritz"``).  A generic command can use it to route to the
+    right port without hard-coding the type check:
+
+        async def turn_on(device: Device) -> None:
+            port = container.get_by_adapter(device.adapter)
+            await port.turn_on(device.id)
+    """
+
+    model_config = ConfigDict(frozen=True)
 
     id: str
-    friendly_name: str
-    aliases: tuple[str, ...] = field(default_factory=tuple)
+    name: str
+    adapter: str
+    aliases: tuple[str, ...] = ()
+
+
+# ---------------------------------------------------------------------------
+# Configured device types (loaded from devices.yaml)
+# ---------------------------------------------------------------------------
+
+
+class TvChannel(Device):
+    """A TV channel exposed as an Alexa PowerController endpoint."""
+
     channel_number: str = ""
 
 
-@dataclass(frozen=True, slots=True)
-class TvAudioDevice:
+class TvAudio(Device):
     """The TV audio endpoint (mute/unmute via Alexa.Speaker)."""
 
-    id: str
-    friendly_name: str
 
+class Tv(BaseModel):
+    """TV configuration — channels, audio and the Harmony activity to activate."""
 
-@dataclass(frozen=True, slots=True)
-class TvConfig:
-    """Configuration for the Harmony Hub TV integration."""
+    model_config = ConfigDict(frozen=True)
 
     watch_activity: str
-    audio: TvAudioDevice
-    channels: tuple[ChannelDevice, ...]
+    audio: TvAudio
+    channels: tuple[TvChannel, ...]
 
 
-@dataclass(frozen=True, slots=True)
-class BlindDevice:
-    """A roller blind/shutter controlled via HomeKit (Alexa.RangeController)."""
+class WindowBlind(Device):
+    """A roller blind/shutter (Alexa.RangeController).
 
-    id: str
-    friendly_name: str
-    homekit_entity_id: str
-    aliases: tuple[str, ...] = field(default_factory=tuple)
+    ``external_id`` is the adapter-specific reference used by BlindPort
+    (e.g. the HomeKit entity_id ``"cover.kueche"``).
+    """
+
+    external_id: str
     invert: bool = False
 
 
-@dataclass(frozen=True, slots=True)
-class ThermostatDevice:
-    """A heating thermostat controlled via fritzctl (Alexa.ThermostatController)."""
+class Thermostat(Device):
+    """A heating thermostat (Alexa.ThermostatController).
 
-    id: str
-    friendly_name: str
-    fritz_name: str
-    aliases: tuple[str, ...] = field(default_factory=tuple)
+    ``external_id`` is the adapter-specific reference used by ThermostatPort
+    (e.g. the FRITZ!Box device name ``"Wohnzimmer"``).
+    """
+
+    external_id: str
     min_celsius: float = 8.0
     max_celsius: float = 28.0
 
 
-@dataclass(frozen=True, slots=True)
-class DeviceRegistry:
+class DeviceRegistry(BaseModel):
     """All configured devices, loaded from devices.yaml."""
 
-    tv: TvConfig
-    blinds: tuple[BlindDevice, ...]
-    thermostats: tuple[ThermostatDevice, ...]
+    model_config = ConfigDict(frozen=True)
+
+    tv: Tv
+    blinds: tuple[WindowBlind, ...]
+    thermostats: tuple[Thermostat, ...]
 
 
 # ---------------------------------------------------------------------------
-# Live backend discovery types
+# Live-discovered backend types (returned by port list_* methods)
 # ---------------------------------------------------------------------------
 
 
-@dataclass(frozen=True, slots=True)
-class ConnectedDevice:
-    """Base class for all live-discovered backend devices."""
+class Activity(Device):
+    """A Harmony Hub activity (e.g. "Watch TV", "PowerOff")."""
 
-
-@dataclass(frozen=True, slots=True)
-class HarmonyActivity:
-    """A Harmony Hub activity (equivalent to one entry in `harmony config`)."""
-
-    id: str
-    label: str
     is_power_off: bool = False
 
 
-@dataclass(frozen=True, slots=True)
-class HarmonyHubDevice(ConnectedDevice):
-    """A physical device controlled by the Harmony Hub."""
+class HubDevice(Device):
+    """A physical device registered on the Harmony Hub."""
 
-    id: str
-    label: str
     manufacturer: str | None = None
     model: str | None = None
 
 
-@dataclass(frozen=True, slots=True)
-class HomeKitDevice(ConnectedDevice):
-    """A HomeKit device (equivalent to one entry in `homekit entities`)."""
+class HomeDevice(Device):
+    """A device discovered on the smart-home network (e.g. via HomeKit)."""
 
-    entity_id: str
-    name: str
     domain: str
     room: str | None = None
 
 
-@dataclass(frozen=True, slots=True)
-class FritzDevice(ConnectedDevice):
-    """A FRITZ!Box smart-home device (equivalent to one entry in `fritzctl list`)."""
+class LiveThermostat(Device):
+    """A FRITZ!Box thermostat with real-time state."""
 
-    id: str
-    name: str
     online: bool
     current_temp: float
     target_temp: float

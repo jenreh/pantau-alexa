@@ -20,21 +20,10 @@ class TestTemperature:
         t = Temperature.from_float(22.2)
         assert t.celsius == 22.0
 
-    def test_below_minimum_raises(self) -> None:
-        with pytest.raises(ValueError):
-            Temperature(celsius=7.9)
-
-    def test_above_maximum_raises(self) -> None:
-        with pytest.raises(ValueError):
-            Temperature(celsius=28.1)
-
-    def test_boundary_minimum(self) -> None:
-        t = Temperature(celsius=8.0)
-        assert t.celsius == 8.0
-
-    def test_boundary_maximum(self) -> None:
-        t = Temperature(celsius=28.0)
-        assert t.celsius == 28.0
+    def test_accepts_any_numeric_value(self) -> None:
+        # Range is enforced by SetThermostatTemperatureCommand using per-device min/max.
+        assert Temperature(celsius=7.9).celsius == 7.9
+        assert Temperature(celsius=28.1).celsius == 28.1
 
 
 class TestPercentage:

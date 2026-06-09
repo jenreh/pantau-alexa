@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
 from typing import Literal
+
+from pydantic import BaseModel, ConfigDict
 
 from pantau.ports.device_registry_port import DeviceRegistryPort
 
@@ -13,12 +14,13 @@ log = logging.getLogger(__name__)
 CapabilityKind = Literal["power", "speaker", "range", "thermostat"]
 
 
-@dataclass(frozen=True, slots=True)
-class DiscoveredDevice:
+class DiscoveredDevice(BaseModel):
     """Minimal device descriptor used by Phase 3 to build Alexa Discovery responses."""
 
+    model_config = ConfigDict(frozen=True)
+
     id: str
-    friendly_name: str
+    name: str
     capability: CapabilityKind
 
 
@@ -30,26 +32,22 @@ class DiscoverDevicesCommand:
         registry = self._registry.get_registry()
 
         channels = [
-            DiscoveredDevice(
-                id=ch.id, friendly_name=ch.friendly_name, capability="power"
-            )
+            DiscoveredDevice(id=ch.id, name=ch.name, capability="power")
             for ch in registry.tv.channels
         ]
         audio = [
             DiscoveredDevice(
                 id=registry.tv.audio.id,
-                friendly_name=registry.tv.audio.friendly_name,
+                name=registry.tv.audio.name,
                 capability="speaker",
             )
         ]
         blinds = [
-            DiscoveredDevice(id=b.id, friendly_name=b.friendly_name, capability="range")
+            DiscoveredDevice(id=b.id, name=b.name, capability="range")
             for b in registry.blinds
         ]
         thermostats = [
-            DiscoveredDevice(
-                id=t.id, friendly_name=t.friendly_name, capability="thermostat"
-            )
+            DiscoveredDevice(id=t.id, name=t.name, capability="thermostat")
             for t in registry.thermostats
         ]
 

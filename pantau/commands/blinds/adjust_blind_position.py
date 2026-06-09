@@ -22,7 +22,7 @@ class AdjustBlindPositionCommand:
         if device is None:
             raise DeviceNotFoundError(endpoint_id)
 
-        homekit_current = await self._blind.get_position(device.homekit_entity_id)
+        homekit_current = await self._blind.get_position(device.external_id)
         alexa_current = (100 - homekit_current) if device.invert else homekit_current
         new_alexa = max(0, min(100, alexa_current + delta))
         homekit_new = (100 - new_alexa) if device.invert else new_alexa
@@ -30,10 +30,10 @@ class AdjustBlindPositionCommand:
         log.info(
             "AdjustBlindPosition: endpoint=%s entity=%s delta=%d %d%%->%d%%",
             endpoint_id,
-            device.homekit_entity_id,
+            device.external_id,
             delta,
             alexa_current,
             new_alexa,
         )
-        await self._blind.set_position(device.homekit_entity_id, homekit_new)
+        await self._blind.set_position(device.external_id, homekit_new)
         return new_alexa

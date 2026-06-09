@@ -5,10 +5,10 @@ from __future__ import annotations
 from typing import Protocol
 
 from pantau.domain.models import (
-    BlindDevice,
-    ChannelDevice,
     DeviceRegistry,
-    ThermostatDevice,
+    Thermostat,
+    TvChannel,
+    WindowBlind,
 )
 
 
@@ -19,14 +19,14 @@ class DeviceRegistryPort(Protocol):
         """Return the full device registry."""
         ...
 
-    def find_channel(self, endpoint_id: str) -> ChannelDevice | None:
-        """Find a channel device by its endpoint ID."""
+    def find_channel(self, endpoint_id: str) -> TvChannel | None:
+        """Find a TV channel by its endpoint ID."""
         ...
 
-    def find_blind(self, endpoint_id: str) -> BlindDevice | None:
-        """Find a blind device by its endpoint ID."""
+    def find_blind(self, endpoint_id: str) -> WindowBlind | None:
+        """Find a window blind by its endpoint ID."""
         ...
 
-    def find_thermostat(self, endpoint_id: str) -> ThermostatDevice | None:
-        """Find a thermostat device by its endpoint ID."""
+    def find_thermostat(self, endpoint_id: str) -> Thermostat | None:
+        """Find a thermostat by its endpoint ID."""
         ...

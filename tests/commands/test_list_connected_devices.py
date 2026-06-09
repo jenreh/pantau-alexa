@@ -8,10 +8,10 @@ from pantau.adapters.mock_tv_adapter import MockTvAdapter
 from pantau.commands.list_connected_devices import ListConnectedDevicesCommand
 from pantau.domain.errors import DeviceUnavailableError
 from pantau.domain.models import (
-    FritzDevice,
-    HarmonyActivity,
-    HarmonyHubDevice,
-    HomeKitDevice,
+    Activity,
+    HomeDevice,
+    HubDevice,
+    LiveThermostat,
 )
 
 
@@ -35,19 +35,23 @@ def _command(
 class TestHarmonyResult:
     async def test_returns_activities_and_devices(self) -> None:
         tv = MockTvAdapter()
-        tv._activities = [HarmonyActivity(id="1", label="Watch TV")]
-        tv._devices = [HarmonyHubDevice(id="10", label="Samsung TV")]
+        tv._activities = [Activity(id="1", name="Watch TV", adapter="harmony")]
+        tv._devices = [HubDevice(id="10", name="Samsung TV", adapter="harmony")]
 
         result = await _command(tv=tv).execute()
 
         assert result.harmony.status == "ok"
-        assert result.harmony.activities == [HarmonyActivity(id="1", label="Watch TV")]
-        assert result.harmony.devices == [HarmonyHubDevice(id="10", label="Samsung TV")]
+        assert result.harmony.activities == [
+            Activity(id="1", name="Watch TV", adapter="harmony")
+        ]
+        assert result.harmony.devices == [
+            HubDevice(id="10", name="Samsung TV", adapter="harmony")
+        ]
         assert result.harmony.error is None
 
     async def test_unavailable_when_hub_raises(self) -> None:
         class FailingTvAdapter(MockTvAdapter):
-            async def list_activities(self) -> list[HarmonyActivity]:
+            async def list_activities(self) -> list[Activity]:
                 raise DeviceUnavailableError("hub offline")
 
         result = await _command(tv=FailingTvAdapter()).execute()
@@ -73,9 +77,10 @@ class TestHomeKitResult:
     async def test_returns_entities(self) -> None:
         blind = MockBlindAdapter()
         blind._devices = [
-            HomeKitDevice(
-                entity_id="cover.wohnzimmer",
+            HomeDevice(
+                id="cover.wohnzimmer",
                 name="Wohnzimmer Rollo",
+                adapter="homekit",
                 domain="cover",
                 room="Wohnzimmer",
             )
@@ -85,11 +90,11 @@ class TestHomeKitResult:
 
         assert result.homekit.status == "ok"
         assert len(result.homekit.devices) == 1
-        assert result.homekit.devices[0].entity_id == "cover.wohnzimmer"
+        assert result.homekit.devices[0].id == "cover.wohnzimmer"
 
     async def test_unavailable_when_homekit_raises(self) -> None:
         class FailingBlindAdapter(MockBlindAdapter):
-            async def list_devices(self) -> list[HomeKitDevice]:
+            async def list_devices(self) -> list[HomeDevice]:
                 raise DeviceUnavailableError("daemon not running")
 
         result = await _command(blind=FailingBlindAdapter()).execute()
@@ -107,10 +112,11 @@ class TestHomeKitResult:
 class TestFritzResult:
     async def test_returns_devices(self) -> None:
         thermostat = MockThermostatAdapter()
-        thermostat._fritz_devices = [
-            FritzDevice(
+        thermostat._devices = [
+            LiveThermostat(
                 id="11630 0000001",
                 name="Wohnzimmer",
+                adapter="fritz",
                 online=True,
                 current_temp=20.5,
                 target_temp=21.0,
@@ -127,7 +133,7 @@ class TestFritzResult:
 
     async def test_unavailable_when_fritz_raises(self) -> None:
         class FailingThermostatAdapter(MockThermostatAdapter):
-            async def list_devices(self) -> list[FritzDevice]:
+            async def list_devices(self) -> list[LiveThermostat]:
                 raise DeviceUnavailableError("connection refused")
 
         result = await _command(thermostat=FailingThermostatAdapter()).execute()
@@ -147,16 +153,17 @@ class TestPartialFailure:
         """HomeKit offline → other two backends still succeed."""
 
         class FailingBlindAdapter(MockBlindAdapter):
-            async def list_devices(self) -> list[HomeKitDevice]:
+            async def list_devices(self) -> list[HomeDevice]:
                 raise DeviceUnavailableError("offline")
 
         tv = MockTvAdapter()
-        tv._activities = [HarmonyActivity(id="1", label="Watch TV")]
+        tv._activities = [Activity(id="1", name="Watch TV", adapter="harmony")]
         thermostat = MockThermostatAdapter()
-        thermostat._fritz_devices = [
-            FritzDevice(
+        thermostat._devices = [
+            LiveThermostat(
                 id="1",
                 name="Küche",
+                adapter="fritz",
                 online=True,
                 current_temp=19.0,
                 target_temp=20.0,
@@ -173,15 +180,15 @@ class TestPartialFailure:
 
     async def test_all_backends_down_returns_all_unavailable(self) -> None:
         class FailingTvAdapter(MockTvAdapter):
-            async def list_activities(self) -> list[HarmonyActivity]:
+            async def list_activities(self) -> list[Activity]:
                 raise DeviceUnavailableError("tv down")
 
         class FailingBlindAdapter(MockBlindAdapter):
-            async def list_devices(self) -> list[HomeKitDevice]:
+            async def list_devices(self) -> list[HomeDevice]:
                 raise DeviceUnavailableError("blind down")
 
         class FailingThermostatAdapter(MockThermostatAdapter):
-            async def list_devices(self) -> list[FritzDevice]:
+            async def list_devices(self) -> list[LiveThermostat]:
                 raise DeviceUnavailableError("fritz down")
 
         result = await _command(

@@ -15,10 +15,10 @@ from pantau.commands.list_connected_devices import ListConnectedDevicesCommand
 from pantau.composition import build_test_container
 from pantau.domain.errors import DeviceUnavailableError
 from pantau.domain.models import (
-    FritzDevice,
-    HarmonyActivity,
-    HarmonyHubDevice,
-    HomeKitDevice,
+    Activity,
+    HomeDevice,
+    HubDevice,
+    LiveThermostat,
 )
 from pantau.ports.blind_port import BlindPort
 from pantau.ports.thermostat_port import ThermostatPort
@@ -113,20 +113,24 @@ class TestConnectedDevicesHappyPath:
     def test_harmony_activities_appear_in_response(self, devices_config: Path) -> None:
         tv = MockTvAdapter()
         tv._activities = [
-            HarmonyActivity(id="1", label="Watch TV"),
-            HarmonyActivity(id="-1", label="PowerOff", is_power_off=True),
+            Activity(id="1", name="Watch TV", adapter="harmony"),
+            Activity(id="-1", name="PowerOff", adapter="harmony", is_power_off=True),
         ]
         body = _make_client(devices_config, tv=tv).get("/devices/connected").json()
         activities = body["harmony"]["activities"]
         assert len(activities) == 2
-        assert activities[0]["label"] == "Watch TV"
+        assert activities[0]["name"] == "Watch TV"
         assert activities[1]["is_power_off"] is True
 
     def test_harmony_devices_appear_in_response(self, devices_config: Path) -> None:
         tv = MockTvAdapter()
         tv._devices = [
-            HarmonyHubDevice(
-                id="10", label="Samsung TV", manufacturer="Samsung", model="QN55"
+            HubDevice(
+                id="10",
+                name="Samsung TV",
+                adapter="harmony",
+                manufacturer="Samsung",
+                model="QN55",
             )
         ]
         body = _make_client(devices_config, tv=tv).get("/devices/connected").json()
@@ -137,9 +141,10 @@ class TestConnectedDevicesHappyPath:
     def test_homekit_entities_appear_in_response(self, devices_config: Path) -> None:
         blind = MockBlindAdapter()
         blind._devices = [
-            HomeKitDevice(
-                entity_id="cover.kueche",
+            HomeDevice(
+                id="cover.kueche",
                 name="Küche Rollo",
+                adapter="homekit",
                 domain="cover",
                 room="Küche",
             )
@@ -149,15 +154,16 @@ class TestConnectedDevicesHappyPath:
         )
         devices = body["homekit"]["devices"]
         assert len(devices) == 1
-        assert devices[0]["entity_id"] == "cover.kueche"
+        assert devices[0]["id"] == "cover.kueche"
         assert devices[0]["room"] == "Küche"
 
     def test_fritz_devices_appear_in_response(self, devices_config: Path) -> None:
         thermostat = MockThermostatAdapter()
-        thermostat._fritz_devices = [
-            FritzDevice(
+        thermostat._devices = [
+            LiveThermostat(
                 id="11630 0000001",
                 name="Wohnzimmer",
+                adapter="fritz",
                 online=True,
                 current_temp=20.5,
                 target_temp=21.0,
@@ -185,7 +191,7 @@ class TestConnectedDevicesHappyPath:
 class TestConnectedDevicesPartialFailure:
     def test_unavailable_harmony_still_returns_200(self, devices_config: Path) -> None:
         class FailingTvAdapter(MockTvAdapter):
-            async def list_activities(self) -> list[HarmonyActivity]:
+            async def list_activities(self) -> list[Activity]:
                 raise DeviceUnavailableError("hub down")
 
         body = (
@@ -200,7 +206,7 @@ class TestConnectedDevicesPartialFailure:
 
     def test_unavailable_homekit_still_returns_200(self, devices_config: Path) -> None:
         class FailingBlindAdapter(MockBlindAdapter):
-            async def list_devices(self) -> list[HomeKitDevice]:
+            async def list_devices(self) -> list[HomeDevice]:
                 raise DeviceUnavailableError("daemon offline")
 
         body = (
@@ -214,7 +220,7 @@ class TestConnectedDevicesPartialFailure:
 
     def test_unavailable_fritz_still_returns_200(self, devices_config: Path) -> None:
         class FailingThermostatAdapter(MockThermostatAdapter):
-            async def list_devices(self) -> list[FritzDevice]:
+            async def list_devices(self) -> list[LiveThermostat]:
                 raise DeviceUnavailableError("fritz unreachable")
 
         body = (

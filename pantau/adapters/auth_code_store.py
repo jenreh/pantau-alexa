@@ -9,16 +9,18 @@ from __future__ import annotations
 import asyncio
 import logging
 import secrets
-from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+
+from pydantic import BaseModel, ConfigDict
 
 log = logging.getLogger(__name__)
 
 _CODE_TTL_SECONDS = 300  # 5 minutes
 
 
-@dataclass(slots=True)
-class AuthCodeEntry:
+class AuthCodeEntry(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     code: str
     user_id: str
     client_id: str

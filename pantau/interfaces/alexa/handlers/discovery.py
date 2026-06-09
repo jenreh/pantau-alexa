@@ -153,7 +153,7 @@ def _build_endpoint(device: DiscoveredDevice) -> dict | None:
     cap_factory, category, description = entry
     return {
         "endpointId": device.id,
-        "friendlyName": device.friendly_name,
+        "friendlyName": device.name,
         "description": description,
         "manufacturerName": "pantau",
         "displayCategories": [category],

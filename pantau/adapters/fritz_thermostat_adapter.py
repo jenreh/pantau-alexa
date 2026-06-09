@@ -9,7 +9,7 @@ import httpx
 from fritzctl.avm.clients import AVMClientAbstract, get_avm_client
 
 from pantau.domain.errors import DeviceNotFoundError, DeviceUnavailableError
-from pantau.domain.models import FritzDevice
+from pantau.domain.models import LiveThermostat
 
 if TYPE_CHECKING:
     from fritzctl.domain.models import Thermostat
@@ -31,6 +31,7 @@ class FritzThermostatAdapter:
         self._injected = client
         self._http: httpx.AsyncClient | None = None
         self._client: AVMClientAbstract | None = client
+        self._ain_cache: dict[str, str] = {}  # external_id → AIN, avoids redundant list_devices() on set ops
 
     async def start(self) -> None:
         """Open the httpx session and auto-detect the AVM API. Call once on startup."""
@@ -45,6 +46,7 @@ class FritzThermostatAdapter:
             await self._http.aclose()
             self._http = None
             self._client = None
+        self._ain_cache.clear()
         log.info("FritzThermostat: client closed")
 
     def _get_client(self) -> AVMClientAbstract:
@@ -54,16 +56,16 @@ class FritzThermostatAdapter:
             )
         return self._client
 
-    async def set_temperature(self, fritz_name: str, celsius: float) -> None:
-        """Resolve fritz_name → AIN, then set the target temperature."""
+    async def set_temperature(self, external_id: str, celsius: float) -> None:
+        """Resolve external_id (fritz device name) → AIN via cache, then set the target temperature."""
         try:
             client = self._get_client()
-            device = await self._resolve(client, fritz_name)
-            await client.set_temperature(device.id, celsius)
+            ain = await self._resolve_ain(client, external_id)
+            await client.set_temperature(ain, celsius)
             log.info(
                 "FritzThermostat: set_temperature name=%s ain=%s celsius=%.1f",
-                fritz_name,
-                device.id,
+                external_id,
+                ain,
                 celsius,
             )
         except DeviceNotFoundError:
@@ -71,14 +73,14 @@ class FritzThermostatAdapter:
         except (httpx.RequestError, TimeoutError, PermissionError) as exc:
             raise DeviceUnavailableError(str(exc)) from exc
 
-    async def get_temperature(self, fritz_name: str) -> float:
+    async def get_temperature(self, external_id: str) -> float:
         """Return the current target temperature for the named device."""
         try:
             client = self._get_client()
-            device = await self._resolve(client, fritz_name)
+            device = await self._resolve(client, external_id)
             log.debug(
                 "FritzThermostat: get_temperature name=%s ain=%s -> %.1f",
-                fritz_name,
+                external_id,
                 device.id,
                 device.target_temp,
             )
@@ -88,16 +90,17 @@ class FritzThermostatAdapter:
         except (httpx.RequestError, TimeoutError, PermissionError) as exc:
             raise DeviceUnavailableError(str(exc)) from exc
 
-    async def list_devices(self) -> list[FritzDevice]:
-        """Return all FRITZ!Box smart-home devices (equivalent to `fritzctl list`)."""
+    async def list_devices(self) -> list[LiveThermostat]:
+        """Return all FRITZ!Box smart-home thermostats with live state."""
         try:
             client = self._get_client()
             raw = await client.list_devices()
             log.debug("FritzThermostat: list_devices count=%d", len(raw))
             return [
-                FritzDevice(
+                LiveThermostat(
                     id=d.id,
                     name=d.name,
+                    adapter="fritz",
                     online=d.online,
                     current_temp=d.current_temp,
                     target_temp=d.target_temp,
@@ -109,9 +112,20 @@ class FritzThermostatAdapter:
         except (httpx.RequestError, TimeoutError, PermissionError) as exc:
             raise DeviceUnavailableError(str(exc)) from exc
 
-    async def _resolve(self, client: AVMClientAbstract, fritz_name: str) -> Thermostat:
+    async def _resolve(self, client: AVMClientAbstract, external_id: str) -> Thermostat:
         devices = await client.list_devices()
-        device = next((d for d in devices if d.name == fritz_name), None)
+        self._ain_cache.update({d.name: d.id for d in devices})
+        device = next((d for d in devices if d.name == external_id), None)
         if device is None:
-            raise DeviceNotFoundError(fritz_name)
+            raise DeviceNotFoundError(external_id)
         return device
+
+    async def _resolve_ain(self, client: AVMClientAbstract, external_id: str) -> str:
+        """Return the AIN for *external_id*, fetching once and caching for subsequent calls."""
+        if external_id not in self._ain_cache:
+            devices = await client.list_devices()
+            self._ain_cache.update({d.name: d.id for d in devices})
+        if external_id not in self._ain_cache:
+            self._ain_cache.clear()
+            raise DeviceNotFoundError(external_id)
+        return self._ain_cache[external_id]

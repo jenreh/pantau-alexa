@@ -35,9 +35,9 @@ class SetThermostatTemperatureCommand:
             raise ValueError(msg)
 
         log.info(
-            "SetThermostatTemperature: endpoint=%s fritz_name=%s celsius=%.1f",
+            "SetThermostatTemperature: endpoint=%s external_id=%s celsius=%.1f",
             endpoint_id,
-            device.fritz_name,
+            device.external_id,
             temp.celsius,
         )
-        await self._thermostat.set_temperature(device.fritz_name, temp.celsius)
+        await self._thermostat.set_temperature(device.external_id, temp.celsius)

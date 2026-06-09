@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol
 
+from pydantic import BaseModel, ConfigDict
 
-@dataclass(frozen=True, slots=True)
-class UserRecord:
+
+class UserRecord(BaseModel):
     """A stored user."""
+
+    model_config = ConfigDict(frozen=True)
 
     id: str
     username: str

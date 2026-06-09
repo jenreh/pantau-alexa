@@ -74,19 +74,19 @@ def test_find_channel_not_found(registry: YamlDeviceRegistry) -> None:
 def test_loads_blinds(registry: YamlDeviceRegistry) -> None:
     blinds = registry.get_registry().blinds
     assert len(blinds) == 1
-    assert blinds[0].homekit_entity_id == "cover.kueche"
+    assert blinds[0].external_id == "cover.kueche"
 
 
 def test_find_blind(registry: YamlDeviceRegistry) -> None:
     blind = registry.find_blind("kueche-rollo")
     assert blind is not None
-    assert blind.friendly_name == "Rollo Küche"
+    assert blind.name == "Rollo Küche"
 
 
 def test_loads_thermostats(registry: YamlDeviceRegistry) -> None:
     thermostats = registry.get_registry().thermostats
     assert len(thermostats) == 1
-    assert thermostats[0].fritz_name == "Wohnzimmer"
+    assert thermostats[0].external_id == "Wohnzimmer"
 
 
 def test_find_thermostat(registry: YamlDeviceRegistry) -> None:

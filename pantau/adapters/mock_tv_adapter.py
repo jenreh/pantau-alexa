@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 
-from pantau.domain.models import HarmonyActivity, HarmonyHubDevice
+from pantau.domain.models import Activity, HubDevice
 
 log = logging.getLogger(__name__)
 
@@ -17,8 +17,8 @@ class MockTvAdapter:
         self.ensure_activity_calls: list[str] = []
         self.set_channel_calls: list[str] = []
         self.toggle_mute_count: int = 0
-        self._activities: list[HarmonyActivity] = []
-        self._devices: list[HarmonyHubDevice] = []
+        self._activities: list[Activity] = []
+        self._devices: list[HubDevice] = []
 
     async def ensure_activity(self, activity_name: str) -> None:
         log.info("MockTV: ensure_activity=%s", activity_name)
@@ -37,10 +37,10 @@ class MockTvAdapter:
         log.info("MockTV: get_current_activity -> %s", self._current_activity)
         return self._current_activity
 
-    async def list_activities(self) -> list[HarmonyActivity]:
+    async def list_activities(self) -> list[Activity]:
         log.info("MockTV: list_activities count=%d", len(self._activities))
         return list(self._activities)
 
-    async def list_devices(self) -> list[HarmonyHubDevice]:
+    async def list_devices(self) -> list[HubDevice]:
         log.info("MockTV: list_devices count=%d", len(self._devices))
         return list(self._devices)

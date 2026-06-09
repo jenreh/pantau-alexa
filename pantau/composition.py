@@ -69,13 +69,22 @@ class Container:
     def __init__(self) -> None:
         self._store: dict[type, object] = {}
         self._order: list[type] = []
+        self._by_adapter: dict[str, type] = {}
 
-    def register(self, port: type[T], adapter: T) -> Container:
-        """Register *adapter* under *port*. Returns self for chaining."""
+    def register(
+        self, port: type[T], adapter: T, *, adapter_name: str | None = None
+    ) -> Container:
+        """Register *adapter* under *port*. Returns self for chaining.
+
+        Pass *adapter_name* (e.g. ``"harmony"``) to also make the adapter
+        retrievable via :meth:`get_by_adapter`.
+        """
         if port in self._store:
             self._order.remove(port)
         self._store[port] = adapter
         self._order.append(port)
+        if adapter_name is not None:
+            self._by_adapter[adapter_name] = port
         return self
 
     def get(self, port: type[T]) -> T:
@@ -83,6 +92,12 @@ class Container:
         if port not in self._store:
             raise KeyError(f"No adapter registered for {port.__name__!r}")
         return cast(T, self._store[port])
+
+    def get_by_adapter(self, adapter_name: str) -> object:
+        """Return the adapter registered under *adapter_name*, or raise KeyError."""
+        if adapter_name not in self._by_adapter:
+            raise KeyError(f"No adapter registered for name {adapter_name!r}")
+        return self._store[self._by_adapter[adapter_name]]
 
     @property
     def lifecycle_adapters(self) -> list[Lifecycle]:
@@ -102,9 +117,9 @@ def build_container(settings: Settings) -> Container:
     container = (
         Container()
         .register(DeviceRegistryPort, registry)  # type: ignore[type-abstract]
-        .register(TvPort, HarmonyTvAdapter())  # type: ignore[type-abstract]
-        .register(BlindPort, HomeKitBlindAdapter())  # type: ignore[type-abstract]
-        .register(ThermostatPort, FritzThermostatAdapter())  # type: ignore[type-abstract]
+        .register(TvPort, HarmonyTvAdapter(), adapter_name="harmony")  # type: ignore[type-abstract]
+        .register(BlindPort, HomeKitBlindAdapter(), adapter_name="homekit")  # type: ignore[type-abstract]
+        .register(ThermostatPort, FritzThermostatAdapter(), adapter_name="fritz")  # type: ignore[type-abstract]
         .register(TokenValidatorPort, jwt_service)  # type: ignore[type-abstract]
         .register(JwtService, jwt_service)
         .register(UserStorePort, user_store)  # type: ignore[type-abstract]

@@ -29,9 +29,9 @@ class SetBlindPositionCommand:
         log.info(
             "SetBlindPosition: endpoint=%s entity=%s percent=%d actual=%d invert=%s",
             endpoint_id,
-            device.homekit_entity_id,
+            device.external_id,
             percent,
             actual,
             device.invert,
         )
-        await self._blind.set_position(device.homekit_entity_id, actual)
+        await self._blind.set_position(device.external_id, actual)
