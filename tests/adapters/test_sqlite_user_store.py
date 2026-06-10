@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncGenerator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -11,7 +12,7 @@ from pantau.adapters.sqlite_user_store import SqliteUserStore
 
 
 @pytest.fixture
-async def store(tmp_path: Path) -> SqliteUserStore:
+async def store(tmp_path: Path) -> AsyncGenerator[SqliteUserStore]:
     s = SqliteUserStore(tmp_path / "test.db")
     await s.start()
     yield s
@@ -19,7 +20,7 @@ async def store(tmp_path: Path) -> SqliteUserStore:
 
 
 @pytest.fixture
-async def memory_store() -> SqliteUserStore:
+async def memory_store() -> AsyncGenerator[SqliteUserStore]:
     s = SqliteUserStore(":memory:")
     await s.start()
     yield s
@@ -57,11 +58,11 @@ class TestRefreshTokens:
         expires = datetime.now(UTC) + timedelta(days=30)
         await store.save_refresh_token("token-abc", user.id, expires)
 
-        user_id = await store.get_refresh_token_user_id("token-abc")
+        user_id = await store.pop_refresh_token("token-abc")
         assert user_id == user.id
 
     async def test_unknown_token_returns_none(self, store: SqliteUserStore) -> None:
-        result = await store.get_refresh_token_user_id("nonexistent-token")
+        result = await store.pop_refresh_token("nonexistent-token")
         assert result is None
 
     async def test_expired_token_returns_none(self, store: SqliteUserStore) -> None:
@@ -69,7 +70,7 @@ class TestRefreshTokens:
         past = datetime.now(UTC) - timedelta(seconds=1)
         await store.save_refresh_token("expired-token", user.id, past)
 
-        result = await store.get_refresh_token_user_id("expired-token")
+        result = await store.pop_refresh_token("expired-token")
         assert result is None
 
     async def test_revoke_token(self, store: SqliteUserStore) -> None:
@@ -78,7 +79,7 @@ class TestRefreshTokens:
         await store.save_refresh_token("revokeable", user.id, expires)
 
         await store.revoke_refresh_token("revokeable")
-        result = await store.get_refresh_token_user_id("revokeable")
+        result = await store.pop_refresh_token("revokeable")
         assert result is None
 
     async def test_save_refresh_token_replaces_existing(
@@ -89,7 +90,7 @@ class TestRefreshTokens:
         await store.save_refresh_token("same-token", user.id, expires)
         # Saving again should not raise
         await store.save_refresh_token("same-token", user.id, expires)
-        user_id = await store.get_refresh_token_user_id("same-token")
+        user_id = await store.pop_refresh_token("same-token")
         assert user_id == user.id
 
 
@@ -110,7 +111,7 @@ class TestPopRefreshToken:
         await store.save_refresh_token("pop-token-2", user.id, expires)
 
         await store.pop_refresh_token("pop-token-2")
-        assert await store.get_refresh_token_user_id("pop-token-2") is None
+        assert await store.pop_refresh_token("pop-token-2") is None
 
     async def test_pop_returns_none_for_expired_token(
         self, store: SqliteUserStore
@@ -162,3 +163,31 @@ class TestLifecycle:
         found = await memory_store.get_user_by_username("henry")
         assert found is not None
         assert found.id == user.id
+
+
+class TestRefreshTokenHashing:
+    """Refresh tokens must be stored hashed, never in plaintext."""
+
+    async def test_plaintext_token_not_in_database(
+        self, store: SqliteUserStore
+    ) -> None:
+        token = "super-secret-refresh-token"  # noqa: S105
+        expires = datetime.now(UTC) + timedelta(days=1)
+        await store.save_refresh_token(token, "user-1", expires)
+
+        conn = store._conn
+        assert conn is not None
+        async with conn.execute("SELECT token FROM refresh_tokens") as cursor:
+            rows = await cursor.fetchall()
+        stored_values = [row["token"] for row in rows]
+        assert stored_values, "token row missing entirely"
+        assert token not in stored_values
+
+    async def test_pop_still_works_with_hashed_storage(
+        self, store: SqliteUserStore
+    ) -> None:
+        token = "another-refresh-token"  # noqa: S105
+        expires = datetime.now(UTC) + timedelta(days=1)
+        await store.save_refresh_token(token, "user-2", expires)
+        assert await store.pop_refresh_token(token) == "user-2"
+        assert await store.pop_refresh_token(token) is None

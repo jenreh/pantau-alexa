@@ -10,13 +10,15 @@ Commands:
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Coroutine
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 import typer
+from pydantic import ValidationError
 
+from pantau.adapters.password_hasher import hash_password
 from pantau.adapters.sqlite_user_store import SqliteUserStore
-from pantau.interfaces.oauth.router import hash_password
 
 app = typer.Typer(
     name="pantau-users",
@@ -32,12 +34,12 @@ def _resolve_db(db: Path | None) -> Path:
         from pantau.config.settings import get_settings
 
         return get_settings().users_db_path
-    except Exception:  # pragma: no cover
+    except ValidationError, OSError:  # pragma: no cover
         return Path("pantau_users.db")
 
 
-def _run(coro: object) -> object:
-    return asyncio.run(coro)  # type: ignore[arg-type]
+def _run[T](coro: Coroutine[Any, Any, T]) -> T:
+    return asyncio.run(coro)
 
 
 # ---------------------------------------------------------------------------

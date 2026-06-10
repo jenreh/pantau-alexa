@@ -4,11 +4,11 @@ version: "3"
 
 includes:
   qa:
-    taskfile: ./tasks/Taskfile.qa.yml
+    taskfile: ./taskfiles/Taskfile.qa.yml
     flatten: true
     vars:
       PROJECT: "{{.PROJECT}}"
-  release: ./tasks/Taskfile.release.yml
+  release: ./taskfiles/Taskfile.release.yml
   docs:
     taskfile: ./taskfiles/Taskfile.docs.yml
     dir: .

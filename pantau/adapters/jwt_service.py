@@ -12,7 +12,6 @@ from datetime import UTC, datetime, timedelta
 
 from jose import JWTError, jwt
 
-from pantau.config.settings import Settings
 from pantau.ports.token_validator_port import TokenClaims
 
 log = logging.getLogger(__name__)
@@ -21,12 +20,22 @@ _SCOPE = "alexa"
 
 
 class JwtService:
-    """Issues and validates HS256-signed JWTs for the home-automation skill."""
+    """Issues and validates HS256-signed JWTs for the home-automation skill.
 
-    def __init__(self, settings: Settings) -> None:
-        self._secret = settings.jwt_secret.get_secret_value()
-        self._algorithm = settings.jwt_algorithm
-        self._access_expire_minutes = settings.jwt_access_token_expire_minutes
+    Implements TokenIssuerPort and TokenValidatorPort. Secret and parameters
+    are injected by the composition root (no config-layer dependency here).
+    """
+
+    def __init__(
+        self,
+        secret: str,
+        *,
+        algorithm: str = "HS256",
+        access_token_expire_minutes: int = 60,
+    ) -> None:
+        self._secret = secret
+        self._algorithm = algorithm
+        self._access_expire_minutes = access_token_expire_minutes
 
     # ------------------------------------------------------------------
     # Issuing

@@ -50,7 +50,7 @@ thermostats:
 #### TV
 
 | Field | Type | Description |
-|---|---|---|
+| --- | --- | --- |
 | `harmony_host` | string | LAN IP address of the Harmony Hub |
 | `watch_activity` | string | Exact Harmony activity name that enables TV viewing |
 | `audio.id` | string | Alexa endpoint ID for the Speaker capability (mute/unmute) |
@@ -59,7 +59,7 @@ thermostats:
 #### Channels
 
 | Field | Type | Description |
-|---|---|---|
+| --- | --- | --- |
 | `id` | string | Unique endpoint ID (used internally and by Alexa) |
 | `friendly_name` | string | Name Alexa uses to identify this endpoint |
 | `aliases` | string[] | Optional alternative names for discovery |
@@ -68,7 +68,7 @@ thermostats:
 #### Blinds
 
 | Field | Type | Description |
-|---|---|---|
+| --- | --- | --- |
 | `id` | string | Unique endpoint ID |
 | `friendly_name` | string | Alexa-visible label |
 | `homekit_entity_id` | string | Entity ID in the HomeKit library's `entities.toml` |
@@ -78,7 +78,7 @@ thermostats:
 #### Thermostats
 
 | Field | Type | Description |
-|---|---|---|
+| --- | --- | --- |
 | `id` | string | Unique endpoint ID |
 | `friendly_name` | string | Alexa-visible label |
 | `fritz_name` | string | Device name as shown in the FRITZ!Box web UI |
@@ -90,36 +90,46 @@ thermostats:
 
 ## Environment Variables
 
-Settings are loaded from environment variables or a `.env` file in the project root. The class is `pantau/config/settings.py` → `Settings`.
+Settings are loaded from environment variables or a `.env` file in the project root (`pantau/config/settings.py → Settings`).
+
+All variables use the `PANTAU_` prefix. A template with every variable is provided in `.env.default` at the project root — copy it to `.env` and fill in the required values.
 
 ### Server
 
 | Variable | Default | Description |
-|---|---|---|
-| `HOST` | `0.0.0.0` | Bind address |
-| `PORT` | `8080` | Listen port |
-| `DEBUG` | `false` | Enable Uvicorn auto-reload (development only) |
-| `DEVICES_CONFIG_PATH` | `config/devices.yaml` | Path to the device registry YAML |
+| --- | --- | --- |
+| `PANTAU_HOST` | `0.0.0.0` | Bind address |
+| `PANTAU_PORT` | `8080` | Listen port |
+| `PANTAU_DEBUG` | `false` | Enable Uvicorn auto-reload (development only) |
+| `PANTAU_DEVICES_CONFIG_PATH` | `config/devices.yaml` | Path to the device registry YAML |
 
 ### Security
 
 | Variable | Default | Description |
-|---|---|---|
-| `JWT_SECRET` | *(empty)* | **Required in production.** HS256 signing key for JWT tokens |
-| `JWT_ALGORITHM` | `HS256` | JWT signing algorithm |
-| `JWT_ACCESS_TOKEN_EXPIRE_MINUTES` | `60` | Access token lifetime |
-| `JWT_REFRESH_TOKEN_EXPIRE_DAYS` | `30` | Refresh token lifetime |
-| `SHARED_SECRET` | *(empty)* | **Required in production.** HMAC shared secret between Lambda and home server |
+| --- | --- | --- |
+| `PANTAU_SHARED_SECRET` | *(empty)* | HMAC shared secret for AWS Lambda → home server request signing. When set, `POST /alexa/directive` requires `X-Pantau-Timestamp` / `X-Pantau-Signature` headers (HMAC-SHA256 over `"{timestamp}." + body`). Empty disables HMAC (bearer-token auth only). |
+| `PANTAU_HMAC_TOLERANCE_SECONDS` | `300` | Replay-protection window for the HMAC timestamp |
+| `PANTAU_JWT_SECRET` | *(empty)* | **Required in production** (min 32 chars). HS256 signing key for JWT tokens — the server refuses to start when this is empty or too short unless `PANTAU_DEV_MODE=true`. |
+| `PANTAU_JWT_ALGORITHM` | `HS256` | JWT signing algorithm |
+| `PANTAU_JWT_ACCESS_TOKEN_EXPIRE_MINUTES` | `60` | Access token lifetime (minutes) |
+| `PANTAU_JWT_REFRESH_TOKEN_EXPIRE_DAYS` | `30` | Refresh token lifetime (days) |
+| `PANTAU_RATE_LIMIT_MAX_ATTEMPTS` | `10` | Max OAuth login/token requests per window (per client IP / username; an additional 3× per-IP bucket blocks username spraying) |
+| `PANTAU_RATE_LIMIT_WINDOW_SECONDS` | `60` | Sliding window for the rate limiter |
+
+::: warning Deployment caveats
+- The HMAC timestamp check bounds *freshness*, not single use: a captured signed request can be replayed within the tolerance window. Lower `PANTAU_HMAC_TOLERANCE_SECONDS` if your clock sync allows it.
+- Rate limiting keys on the TCP client address. Behind a reverse proxy, all clients share the proxy's IP — terminate TLS on the server directly, or configure trusted `X-Forwarded-For` handling before relying on per-IP limits.
+:::
 
 ### OAuth
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `OAUTH_ALLOWED_REDIRECT_URIS` | *(empty list)* | Comma-separated list of permitted redirect URIs. **Must be set in production** — see below. |
-| `DEV_MODE` | `false` | When `true`, an empty `OAUTH_ALLOWED_REDIRECT_URIS` list accepts any redirect URI (dev convenience). **Never set in production.** |
+| `PANTAU_OAUTH_ALLOWED_REDIRECT_URIS` | *(empty)* | Comma-separated list of permitted redirect URIs. **Must be set in production** — see below. |
+| `PANTAU_DEV_MODE` | `false` | When `true`, an empty `PANTAU_OAUTH_ALLOWED_REDIRECT_URIS` accepts any redirect URI. **Never enable in production.** |
 
 ::: warning Fail-closed allowlist
-When `OAUTH_ALLOWED_REDIRECT_URIS` is empty **and** `DEV_MODE` is `false`, every request to `GET /oauth/authorize` and `POST /oauth/authorize` returns **503 Service Unavailable**. This is intentional — a misconfigured production server must fail loudly rather than silently accept any redirect URI.
+When `PANTAU_OAUTH_ALLOWED_REDIRECT_URIS` is empty **and** `PANTAU_DEV_MODE` is `false`, every request to `GET /oauth/authorize` and `POST /oauth/authorize` returns **503 Service Unavailable**. This is intentional — a misconfigured production server must fail loudly rather than silently accept any redirect URI.
 
 For local development without a fixed redirect URI, set `PANTAU_DEV_MODE=true` in your `.env`.
 :::
@@ -127,16 +137,16 @@ For local development without a fixed redirect URI, set `PANTAU_DEV_MODE=true` i
 ### Storage
 
 | Variable | Default | Description |
-|---|---|---|
-| `USERS_DB_PATH` | `pantau_users.db` | Path to the SQLite database for user accounts |
+| --- | --- | --- |
+| `PANTAU_USERS_DB_PATH` | `pantau_users.db` | Path to the SQLite database for user accounts |
 
-### AWS (Phase 5 — planned)
+### AWS / S3 beacon
 
 | Variable | Default | Description |
-|---|---|---|
-| `AWS_REGION` | `eu-central-1` | AWS region for S3 beacon |
-| `S3_BEACON_BUCKET` | `pantau-alexa-beacon` | S3 bucket name |
-| `S3_BEACON_KEY` | `endpoint.json` | S3 object key for the beacon file |
+| --- | --- | --- |
+| `PANTAU_AWS_REGION` | `eu-central-1` | AWS region for S3 beacon |
+| `PANTAU_S3_BEACON_BUCKET` | `pantau-alexa-beacon` | S3 bucket name |
+| `PANTAU_S3_BEACON_KEY` | `endpoint.json` | S3 object key for the beacon file |
 
 ---
 
@@ -144,30 +154,31 @@ For local development without a fixed redirect URI, set `PANTAU_DEV_MODE=true` i
 
 ```bash
 # .env — do not commit to git
-HOST=127.0.0.1
-PORT=8080
-DEBUG=true
-DEVICES_CONFIG_PATH=config/devices.yaml
-USERS_DB_PATH=pantau_users_dev.db
-JWT_SECRET=dev-secret-not-for-production
+PANTAU_HOST=127.0.0.1
+PANTAU_PORT=8080
+PANTAU_DEBUG=true
+PANTAU_DEVICES_CONFIG_PATH=config/devices.yaml
+PANTAU_USERS_DB_PATH=pantau_users_dev.db
+PANTAU_JWT_SECRET=dev-secret-not-for-production
+PANTAU_DEV_MODE=true
 ```
 
 ## Example .env for production
 
 ```bash
-HOST=0.0.0.0
-PORT=8080
-DEBUG=false
-DEVICES_CONFIG_PATH=/opt/pantau/config/devices.yaml
-USERS_DB_PATH=/var/lib/pantau/users.db
+PANTAU_HOST=0.0.0.0
+PANTAU_PORT=8080
+PANTAU_DEBUG=false
+PANTAU_DEVICES_CONFIG_PATH=/opt/pantau/config/devices.yaml
+PANTAU_USERS_DB_PATH=/var/lib/pantau/users.db
 
 # Generate with: python -c "import secrets; print(secrets.token_hex(32))"
-JWT_SECRET=a84f2c...
-SHARED_SECRET=7e91d3...
+PANTAU_JWT_SECRET=a84f2c...
+PANTAU_SHARED_SECRET=7e91d3...
 
-OAUTH_ALLOWED_REDIRECT_URIS=https://layla.amazon.com/api/skill/link/AMZN1234
+PANTAU_OAUTH_ALLOWED_REDIRECT_URIS=https://layla.amazon.com/api/skill/link/AMZN1234
 ```
 
 ::: tip Nested env vars
-pydantic-settings supports `__` as a nesting delimiter. For example, you can set `JWT__SECRET` as an alternative to `JWT_SECRET` (the underscore-based flattening also works, as shown above).
+pydantic-settings supports `__` as a nesting delimiter inside the prefix. For example, `PANTAU_JWT__SECRET` is an alternative spelling for `PANTAU_JWT_SECRET`.
 :::

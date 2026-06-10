@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 
 from pantau.api.app import create_app
 from pantau.composition import build_test_container
+from pantau.config.settings import Settings
 
 DEVICES_YAML = """
 tv:
@@ -47,7 +48,7 @@ def devices_config(tmp_path: Path) -> Path:
 @pytest.fixture
 def client(devices_config: Path) -> TestClient:
     container = build_test_container(devices_config)
-    app = create_app(container=container)
+    app = create_app(settings=Settings(dev_mode=True), container=container)
     return TestClient(app)
 
 

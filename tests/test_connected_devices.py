@@ -11,18 +11,15 @@ from pantau.adapters.mock_blind_adapter import MockBlindAdapter
 from pantau.adapters.mock_thermostat_adapter import MockThermostatAdapter
 from pantau.adapters.mock_tv_adapter import MockTvAdapter
 from pantau.api.app import create_app
-from pantau.commands.list_connected_devices import ListConnectedDevicesCommand
 from pantau.composition import build_test_container
-from pantau.domain.errors import DeviceUnavailableError
+from pantau.config.settings import Settings
 from pantau.domain.models import (
     Activity,
     HomeDevice,
     HubDevice,
     LiveThermostat,
 )
-from pantau.ports.blind_port import BlindPort
-from pantau.ports.thermostat_port import ThermostatPort
-from pantau.ports.tv_port import TvPort
+from pantau.ports.listable_port import BackendListResult
 
 DEVICES_YAML = """
 tv:
@@ -59,24 +56,18 @@ def _make_client(
     thermostat: MockThermostatAdapter | None = None,
 ) -> TestClient:
     container = build_test_container(devices_config)
-    # Override mocks so tests can inject canned data
+    # Override adapter instances so tests can inject canned data.
+    # The ListConnectedDevicesCommand holds a reference to container and calls
+    # all_implementing() at execute-time, so updating _by_adapter here is enough.
     if tv is not None:
-        container.register(TvPort, tv)  # type: ignore[type-abstract]
+        container.register(type(tv), tv, adapter_name="harmony")
     if blind is not None:
-        container.register(BlindPort, blind)  # type: ignore[type-abstract]
+        container.register(type(blind), blind, adapter_name="homekit")
     if thermostat is not None:
-        container.register(ThermostatPort, thermostat)  # type: ignore[type-abstract]
-    # Re-register the command with the overridden ports
-    container.register(
-        ListConnectedDevicesCommand,
-        ListConnectedDevicesCommand(
-            tv_port=container.get(TvPort),  # type: ignore[type-abstract]
-            blind_port=container.get(BlindPort),  # type: ignore[type-abstract]
-            thermostat_port=container.get(ThermostatPort),  # type: ignore[type-abstract]
-        ),
-    )
-    app = create_app(container=container)
-    return TestClient(app)
+        container.register(type(thermostat), thermostat, adapter_name="fritz")
+    app = create_app(settings=Settings(dev_mode=True), container=container)
+    # MockTokenValidator accepts any non-empty bearer token.
+    return TestClient(app, headers={"Authorization": "Bearer test-token"})
 
 
 @pytest.fixture
@@ -87,6 +78,18 @@ def client(devices_config: Path) -> TestClient:
 # ---------------------------------------------------------------------------
 # Basic shape
 # ---------------------------------------------------------------------------
+
+
+class TestConnectedDevicesAuth:
+    def test_missing_token_returns_401(self, client: TestClient) -> None:
+        response = client.get("/devices/connected", headers={"Authorization": ""})
+        assert response.status_code == 401
+
+    def test_malformed_header_returns_401(self, client: TestClient) -> None:
+        response = client.get(
+            "/devices/connected", headers={"Authorization": "Basic abc"}
+        )
+        assert response.status_code == 401
 
 
 class TestConnectedDevicesShape:
@@ -191,8 +194,8 @@ class TestConnectedDevicesHappyPath:
 class TestConnectedDevicesPartialFailure:
     def test_unavailable_harmony_still_returns_200(self, devices_config: Path) -> None:
         class FailingTvAdapter(MockTvAdapter):
-            async def list_activities(self) -> list[Activity]:
-                raise DeviceUnavailableError("hub down")
+            async def list_backend(self) -> BackendListResult:
+                return BackendListResult(status="unavailable", error="hub down")
 
         body = (
             _make_client(devices_config, tv=FailingTvAdapter())
@@ -206,8 +209,8 @@ class TestConnectedDevicesPartialFailure:
 
     def test_unavailable_homekit_still_returns_200(self, devices_config: Path) -> None:
         class FailingBlindAdapter(MockBlindAdapter):
-            async def list_devices(self) -> list[HomeDevice]:
-                raise DeviceUnavailableError("daemon offline")
+            async def list_backend(self) -> BackendListResult:
+                return BackendListResult(status="unavailable", error="daemon offline")
 
         body = (
             _make_client(devices_config, blind=FailingBlindAdapter())
@@ -220,8 +223,10 @@ class TestConnectedDevicesPartialFailure:
 
     def test_unavailable_fritz_still_returns_200(self, devices_config: Path) -> None:
         class FailingThermostatAdapter(MockThermostatAdapter):
-            async def list_devices(self) -> list[LiveThermostat]:
-                raise DeviceUnavailableError("fritz unreachable")
+            async def list_backend(self) -> BackendListResult:
+                return BackendListResult(
+                    status="unavailable", error="fritz unreachable"
+                )
 
         body = (
             _make_client(devices_config, thermostat=FailingThermostatAdapter())

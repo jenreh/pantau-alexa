@@ -4,31 +4,37 @@ from __future__ import annotations
 
 import logging
 
-from pantau.domain.models import LiveThermostat
+from pantau.domain.models import ADAPTER_FRITZ, Device, LiveThermostat
+from pantau.ports.listable_port import BackendListResult
 
 log = logging.getLogger(__name__)
 
 
 class MockThermostatAdapter:
-    """Stub implementation of ThermostatPort for development and testing."""
+    """Stub implementation of TemperatureControllablePort and ListablePort for testing."""
+
+    adapter_name = ADAPTER_FRITZ
 
     def __init__(self) -> None:
         self._temperatures: dict[str, float] = {}
-        self.set_temperature_calls: list[tuple[str, float]] = []
+        self.set_temperature_calls: list[tuple[Device, float]] = []
         self._devices: list[LiveThermostat] = []
 
-    async def set_temperature(self, external_id: str, celsius: float) -> None:
+    async def set_temperature(self, device: Device, celsius: float) -> None:
         log.info(
-            "MockThermostat: set_temperature name=%s celsius=%.1f", external_id, celsius
+            "MockThermostat: set_temperature device=%s celsius=%.1f", device.id, celsius
         )
-        self._temperatures[external_id] = celsius
-        self.set_temperature_calls.append((external_id, celsius))
+        self._temperatures[device.id] = celsius
+        self.set_temperature_calls.append((device, celsius))
 
-    async def get_temperature(self, external_id: str) -> float:
-        temp = self._temperatures.get(external_id, 20.0)
-        log.info("MockThermostat: get_temperature name=%s -> %.1f", external_id, temp)
+    async def get_temperature(self, device: Device) -> float:
+        temp = self._temperatures.get(device.id, 20.0)
+        log.info("MockThermostat: get_temperature device=%s -> %.1f", device.id, temp)
         return temp
 
-    async def list_devices(self) -> list[LiveThermostat]:
-        log.info("MockThermostat: list_devices count=%d", len(self._devices))
-        return list(self._devices)
+    async def list_backend(self) -> BackendListResult:
+        log.info("MockThermostat: list_backend devices=%d", len(self._devices))
+        return BackendListResult(
+            status="ok",
+            data={"devices": [d.model_dump() for d in self._devices]},
+        )

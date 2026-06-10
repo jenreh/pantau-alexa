@@ -67,7 +67,7 @@ export default withMermaid({
     },
 
     socialLinks: [
-      { icon: "github", link: "https://github.com/example/pantau-alexa" },
+      { icon: "github", link: "https://github.com/jenreh/pantau-alexa" },
     ],
 
     footer: {

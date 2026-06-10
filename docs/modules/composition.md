@@ -15,26 +15,42 @@ Without a composition root, wiring logic leaks everywhere: handlers create their
 
 ## The Container
 
-A type-keyed dictionary that maps port types to their adapter instances:
+A type-keyed registry that maps port types to adapter instances, plus an `adapter_name` index for device-centric capability resolution:
 
 ```python
 class Container:
-    def register(self, port: type[T], adapter: T) -> Container:
-        """Register adapter under port. Returns self for chaining."""
-        self._store[port] = adapter
-        self._order.append(port)
-        return self
+    def register(
+        self, port: type[T], adapter: T, *, adapter_name: str | None = None
+    ) -> Container:
+        """Register adapter under port. Returns self for chaining.
+
+        Pass adapter_name (e.g. "harmony") to also make the adapter
+        retrievable via resolve()."""
 
     def get(self, port: type[T]) -> T:
         """Return the adapter for port. Raises KeyError if not registered."""
-        return cast(T, self._store[port])
+
+    def resolve(self, device: Device, capability: type[T]) -> T:
+        """Return the adapter for device.adapter implementing capability."""
+
+    def all_implementing(self, capability: type[T]) -> list[T]:
+        """All distinct registered adapters that implement capability."""
 
     @property
     def lifecycle_adapters(self) -> list[Lifecycle]:
         """All registered adapters that implement start()/stop()."""
 ```
 
-The key is the **type** (the port class itself), not a string. This means the IDE and mypy can type-check `container.get(TvPort)` — you get autocomplete on the result.
+The key is the **type** (the port class itself), not a string. This means the IDE and mypy can type-check `container.get(DeviceRegistryPort)` — you get autocomplete on the result.
+
+### Device-centric resolution
+
+`resolve(device, capability)` looks up the adapter registered under the device's `adapter` name (`harmony`, `homekit`, `fritz`) and verifies via `isinstance` that it implements the requested capability port. It raises **domain errors**, not generic ones, so handlers can map them to proper Alexa error types instead of `INTERNAL_ERROR`:
+
+- `DeviceUnavailableError` — no adapter registered for the device's adapter name
+- `DeviceCapabilityError` — the adapter does not implement the requested capability
+
+The `Container` itself satisfies `CapabilityResolverPort` structurally and is passed to the commands as their resolver.
 
 ---
 
@@ -45,59 +61,76 @@ Builds the full application with all real adapters:
 ```python
 def build_container(settings: Settings) -> Container:
     registry = YamlDeviceRegistry(settings.devices_config_path)
-    jwt_service = JwtService(settings)
+
+    harmony = HarmonyTvAdapter()
+    homekit = HomeKitBlindAdapter()
+    fritz = FritzThermostatAdapter()
+    jwt_service = JwtService(
+        settings.jwt_secret.get_secret_value(),
+        algorithm=settings.jwt_algorithm,
+        access_token_expire_minutes=settings.jwt_access_token_expire_minutes,
+    )
     user_store = SqliteUserStore(settings.users_db_path)
     auth_codes = AuthCodeStore()
 
     container = (
         Container()
         .register(DeviceRegistryPort, registry)
-        .register(TvPort,            HarmonyTvAdapter(harmony_host))
-        .register(BlindPort,         HomeKitBlindAdapter())
-        .register(ThermostatPort,    FritzThermostatAdapter())
+        .register(HarmonyTvAdapter, harmony, adapter_name=ADAPTER_HARMONY)
+        .register(HomeKitBlindAdapter, homekit, adapter_name=ADAPTER_HOMEKIT)
+        .register(FritzThermostatAdapter, fritz, adapter_name=ADAPTER_FRITZ)
         .register(TokenValidatorPort, jwt_service)
-        .register(JwtService,        jwt_service)
-        .register(UserStorePort,     user_store)
-        .register(AuthCodeStore,     auth_codes)
+        .register(TokenIssuerPort, jwt_service)
+        .register(UserStorePort, user_store)
+        .register(AuthCodeStorePort, auth_codes)
+        .register(PasswordHasherPort, BcryptPasswordHasher())
     )
 
     _wire_commands_and_router(container)
     return container
 ```
 
-Note that `JwtService` is registered *twice*: once under `TokenValidatorPort` (for directive validation) and once under `JwtService` directly (for the OAuth token endpoint, which needs to call `issue_access_token()`).
+Note that `JwtService` is constructed from individual values (`secret`, `algorithm`, `access_token_expire_minutes`) — it has no dependency on the `Settings` object. The same instance is registered *twice*: under `TokenValidatorPort` (for directive validation) and under `TokenIssuerPort` (for the OAuth token endpoint).
+
+The device adapters are registered under their concrete types with an `adapter_name` slot (`ADAPTER_HARMONY`, `ADAPTER_HOMEKIT`, `ADAPTER_FRITZ` from `domain/models.py`) — capability resolution happens per device through `resolve()`, not through capability-port keys.
 
 ---
 
 ## _wire_commands_and_router()
 
-Creates all commands as singletons and wires the Alexa directive router:
+Creates all commands as singletons and wires the Alexa directive router. Every device command receives the registry port and the container itself (as `CapabilityResolverPort`):
 
 ```python
 def _wire_commands_and_router(container: Container) -> None:
-    # Retrieve ports (not adapters — the command layer never sees adapters)
     registry_port = container.get(DeviceRegistryPort)
-    tv_port       = container.get(TvPort)
-    blind_port    = container.get(BlindPort)
-    thermostat_port = container.get(ThermostatPort)
 
-    # Create commands (singletons — SetTvMuteCommand holds assumed mute state)
-    activate_channel = ActivateChannelCommand(registry_port, tv_port)
-    set_mute         = SetTvMuteCommand(registry_port, tv_port)
-    set_temperature  = SetThermostatTemperatureCommand(registry_port, thermostat_port)
-    set_blind        = SetBlindPositionCommand(registry_port, blind_port)
-    adjust_blind     = AdjustBlindPositionCommand(registry_port, blind_port)
-    discover         = DiscoverDevicesCommand(registry_port)
+    # Commands (singletons) — registry + container-as-resolver
+    turn_on = TurnOnCommand(registry_port, container)
+    turn_off = TurnOffCommand(registry_port, container)
+    set_mute = SetMuteCommand(registry_port, container)
+    set_volume = SetVolumeCommand(registry_port, container)
+    adjust_volume = AdjustVolumeCommand(registry_port, container)
+    get_speaker_state = GetSpeakerStateCommand(registry_port, container)
+    set_range = SetRangeCommand(registry_port, container)
+    adjust_range = AdjustRangeCommand(registry_port, container)
+    set_temperature = SetTemperatureCommand(registry_port, container)
+    adjust_temperature = AdjustTemperatureCommand(
+        registry_port, container, set_temperature
+    )
+    discover = DiscoverDevicesCommand(registry_port)
+    list_connected = ListConnectedDevicesCommand(container)
 
     # Register commands in container
-    container.register(ActivateChannelCommand, activate_channel)
+    container.register(TurnOnCommand, turn_on)
     # ... etc.
 
     # Create handlers, passing the commands they need
-    power_handler    = PowerHandler(activate_channel)
-    speaker_handler  = SpeakerHandler(set_mute)
-    thermostat_handler = ThermostatHandler(set_temperature)
-    range_handler    = RangeHandler(set_blind, adjust_blind)
+    power_handler = PowerHandler(turn_on, turn_off)
+    speaker_handler = SpeakerHandler(
+        set_mute, set_volume, adjust_volume, get_speaker_state
+    )
+    thermostat_handler = ThermostatHandler(set_temperature, adjust_temperature)
+    range_handler = RangeHandler(set_range, adjust_range)
     discovery_handler = DiscoveryHandler(discover)
 
     # Wire the Alexa directive router
@@ -111,33 +144,37 @@ def _wire_commands_and_router(container: Container) -> None:
     container.register(AlexaDirectiveRouter, alexa_router)
 ```
 
+`AdjustTemperatureCommand` additionally receives `SetTemperatureCommand`, to which it delegates after computing the new setpoint.
+
 ---
 
 ## build_test_container() — Integration tests
 
-Same wiring, but all device adapters are replaced with mocks:
+Same wiring, but the device adapters are replaced with mocks. The mocks are registered under the **same adapter names**, so `resolve()` works identically:
 
 ```python
 def build_test_container(devices_config_path: Path) -> Container:
+    registry = YamlDeviceRegistry(devices_config_path)
+
     container = (
         Container()
-        .register(DeviceRegistryPort, YamlDeviceRegistry(devices_config_path))
-        .register(TvPort,            MockTvAdapter())
-        .register(BlindPort,         MockBlindAdapter())
-        .register(ThermostatPort,    MockThermostatAdapter())
+        .register(DeviceRegistryPort, registry)
+        .register(MockTvAdapter, MockTvAdapter(), adapter_name=ADAPTER_HARMONY)
+        .register(MockBlindAdapter, MockBlindAdapter(), adapter_name=ADAPTER_HOMEKIT)
+        .register(MockThermostatAdapter, MockThermostatAdapter(), adapter_name=ADAPTER_FRITZ)
         .register(TokenValidatorPort, MockTokenValidator())
     )
     _wire_commands_and_router(container)
     return container
 ```
 
-`_wire_commands_and_router()` is shared — commands and handlers are wired identically in both production and test. The only difference is which adapter sits behind the port.
+`_wire_commands_and_router()` is shared — commands and handlers are wired identically in both production and test. The only difference is which adapter sits behind each adapter name.
 
 ---
 
 ## build_oauth_test_container() — OAuth integration tests
 
-Extends `build_test_container()` with a real `JwtService` and an in-memory SQLite store, so OAuth flows can be tested end-to-end without real devices:
+Extends `build_test_container()` with a real `JwtService`, an in-memory SQLite store, a real auth-code store and the bcrypt hasher, so OAuth flows can be tested end-to-end without real devices:
 
 ```python
 def build_oauth_test_container(
@@ -147,10 +184,12 @@ def build_oauth_test_container(
     auth_codes: AuthCodeStore,
 ) -> Container:
     container = build_test_container(devices_config_path)
-    container.register(JwtService,        jwt_service)
+    # Override TokenValidatorPort with the real JwtService for OAuth tests
     container.register(TokenValidatorPort, jwt_service)
-    container.register(UserStorePort,     user_store)
-    container.register(AuthCodeStore,     auth_codes)
+    container.register(TokenIssuerPort, jwt_service)
+    container.register(UserStorePort, user_store)
+    container.register(AuthCodeStorePort, auth_codes)
+    container.register(PasswordHasherPort, BcryptPasswordHasher())
     return container
 ```
 
@@ -167,10 +206,10 @@ class Lifecycle(Protocol):
     async def stop(self) -> None: ...
 ```
 
-`container.lifecycle_adapters` returns all registered adapters that satisfy this protocol. The FastAPI lifespan calls them in registration order on startup and in reverse order on shutdown.
+`container.lifecycle_adapters` returns all registered adapters that satisfy this protocol (deduped by instance, in registration order). The FastAPI lifespan calls them in registration order on startup and in reverse order on shutdown.
 
 **Current lifecycle adapters:**
-- `HarmonyTvAdapter` — opens/closes the Harmony Hub WebSocket
+- `HarmonyTvAdapter`, `HomeKitBlindAdapter`, `FritzThermostatAdapter` — open/close their backend connections
 - `SqliteUserStore` — opens/closes the SQLite connection and creates tables
 
 ---
@@ -182,14 +221,16 @@ graph LR
     Comp["composition.py<br/>build_container()"]
 
     Comp -->|"registers"| Reg["YamlDeviceRegistry<br/>→ DeviceRegistryPort"]
-    Comp -->|"registers"| Harm["HarmonyTvAdapter<br/>→ TvPort"]
-    Comp -->|"registers"| HK["HomeKitBlindAdapter<br/>→ BlindPort"]
-    Comp -->|"registers"| Fritz["FritzThermostatAdapter<br/>→ ThermostatPort"]
-    Comp -->|"registers"| Jwt["JwtService<br/>→ TokenValidatorPort"]
+    Comp -->|"registers"| Harm["HarmonyTvAdapter<br/>adapter_name=harmony"]
+    Comp -->|"registers"| HK["HomeKitBlindAdapter<br/>adapter_name=homekit"]
+    Comp -->|"registers"| Fritz["FritzThermostatAdapter<br/>adapter_name=fritz"]
+    Comp -->|"registers"| Jwt["JwtService<br/>→ TokenValidatorPort + TokenIssuerPort"]
     Comp -->|"registers"| Sqlite["SqliteUserStore<br/>→ UserStorePort"]
+    Comp -->|"registers"| Hash["BcryptPasswordHasher<br/>→ PasswordHasherPort"]
 
-    Comp -->|"creates"| Cmds["Commands<br/>(ActivateChannel · SetBlind · etc.)"]
-    Cmds -->|"via port"| Reg & Harm & HK & Fritz
+    Comp -->|"creates"| Cmds["Commands<br/>(TurnOn · SetRange · SetTemperature · etc.)"]
+    Cmds -->|"via registry port"| Reg
+    Cmds -->|"resolve(device, capability)"| Harm & HK & Fritz
 
     Comp -->|"creates"| Handlers["AlexaDirectiveRouter<br/>+ handlers"]
     Handlers -->|"calls"| Cmds

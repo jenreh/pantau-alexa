@@ -1,4 +1,4 @@
-"""Application settings via pydantic-settings (env vars + .env file)."""
+"""Application settings via pydantic-settings (reads from os.environ; .env loaded by dotenv at startup)."""
 
 from __future__ import annotations
 
@@ -17,8 +17,7 @@ class Settings(BaseSettings):
     """Runtime configuration loaded from environment variables."""
 
     model_config = SettingsConfigDict(
-        env_file=".env",
-        env_file_encoding="utf-8",
+        env_prefix="PANTAU_",
         env_nested_delimiter="__",
         case_sensitive=False,
     )
@@ -28,7 +27,6 @@ class Settings(BaseSettings):
     port: int = 8080
     debug: bool = False
 
-    # Device config path (override via PANTAU_DEVICES_CONFIG_PATH env var)
     devices_config_path: Path = _PROJECT_ROOT / "config" / "devices.yaml"
 
     # AWS / S3 beacon
@@ -36,8 +34,10 @@ class Settings(BaseSettings):
     s3_beacon_bucket: str = "pantau-alexa-beacon"
     s3_beacon_key: str = "endpoint.json"
 
-    # Security — shared secret between Lambda and home server (HMAC)
+    # Security — shared secret between Lambda and home server (HMAC).
+    # When set, /alexa/directive requires X-Pantau-Timestamp/-Signature headers.
     shared_secret: SecretStr = SecretStr("")  # must be set via env in prod
+    hmac_tolerance_seconds: int = 300  # replay-protection window
 
     # JWT signing
     jwt_secret: SecretStr = SecretStr("")  # must be set via env in prod
@@ -47,6 +47,10 @@ class Settings(BaseSettings):
 
     # User store
     users_db_path: Path = Path("pantau_users.db")
+
+    # Rate limiting — login and token endpoints (per client IP / username)
+    rate_limit_max_attempts: int = 10
+    rate_limit_window_seconds: int = 60
 
     # OAuth — set DEV_MODE=true to skip redirect_uri allowlist checks locally.
     # In production both settings must be provided; omitting them blocks all auth requests.

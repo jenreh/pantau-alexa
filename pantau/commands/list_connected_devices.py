@@ -2,108 +2,58 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
-from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
-
-from pantau.domain.errors import DeviceUnavailableError
-from pantau.domain.models import Activity, HomeDevice, HubDevice, LiveThermostat
-from pantau.ports.blind_port import BlindPort
-from pantau.ports.thermostat_port import ThermostatPort
-from pantau.ports.tv_port import TvPort
+from pantau.ports.capability_resolver_port import CapabilityResolverPort
+from pantau.ports.listable_port import ListablePort
 
 log = logging.getLogger(__name__)
 
-BackendStatus = Literal["ok", "unavailable"]
-
-
-class HarmonyResult(BaseModel):
-    model_config = ConfigDict(frozen=True)
-
-    status: BackendStatus
-    activities: list[Activity] = []
-    devices: list[HubDevice] = []
-    error: str | None = None
-
-
-class HomeKitResult(BaseModel):
-    model_config = ConfigDict(frozen=True)
-
-    status: BackendStatus
-    devices: list[HomeDevice] = []
-    error: str | None = None
-
-
-class FritzResult(BaseModel):
-    model_config = ConfigDict(frozen=True)
-
-    status: BackendStatus
-    devices: list[LiveThermostat] = []
-    error: str | None = None
-
-
-class ConnectedDevicesResult(BaseModel):
-    model_config = ConfigDict(frozen=True)
-
-    harmony: HarmonyResult
-    homekit: HomeKitResult
-    fritz: FritzResult
-
 
 class ListConnectedDevicesCommand:
-    """Query all three backends for live connected devices.
+    """Query all registered ListablePort adapters for live connected devices.
 
-    Each backend is queried independently. If one is offline its result carries
-    ``status="unavailable"`` and an error message; the other backends are
-    unaffected.
+    Each backend is queried independently via list_backend().  If one is offline
+    its result carries ``status="unavailable"`` and an error message; the other
+    backends are unaffected.
+
+    Adding a new adapter (e.g. Hue, Sonos) only requires implementing ListablePort
+    and registering it — no changes here.
     """
 
-    def __init__(
-        self,
-        tv_port: TvPort,
-        blind_port: BlindPort,
-        thermostat_port: ThermostatPort,
-    ) -> None:
-        self._tv = tv_port
-        self._blind = blind_port
-        self._thermostat = thermostat_port
+    def __init__(self, resolver: CapabilityResolverPort) -> None:
+        self._resolver = resolver
 
-    async def execute(self) -> ConnectedDevicesResult:
-        return ConnectedDevicesResult(
-            harmony=await self._query_harmony(),
-            homekit=await self._query_homekit(),
-            fritz=await self._query_fritz(),
+    async def execute(self) -> dict[str, dict]:
+        """Return a mapping of adapter_name → backend-specific serialisable data."""
+        adapters = self._resolver.all_implementing(ListablePort)  # type: ignore[type-abstract]
+        backends = await asyncio.gather(
+            *[a.list_backend() for a in adapters], return_exceptions=True
         )
-
-    async def _query_harmony(self) -> HarmonyResult:
-        try:
-            activities = await self._tv.list_activities()
-            devices = await self._tv.list_devices()
+        result: dict[str, dict] = {}
+        for adapter, backend in zip(adapters, backends, strict=True):
+            if isinstance(backend, BaseException):
+                # One misbehaving backend must not take down the whole listing.
+                log.error(
+                    "ListConnectedDevices: %s raised: %s",
+                    adapter.adapter_name,
+                    backend,
+                )
+                result[adapter.adapter_name] = {
+                    "status": "unavailable",
+                    "error": "unexpected backend error",
+                }
+                continue
+            data: dict = {"status": backend.status}
+            if backend.error:
+                data["error"] = backend.error
+            else:
+                data.update(backend.data)
+            result[adapter.adapter_name] = data
             log.info(
-                "ListConnectedDevices: harmony activities=%d devices=%d",
-                len(activities),
-                len(devices),
+                "ListConnectedDevices: %s status=%s",
+                adapter.adapter_name,
+                backend.status,
             )
-            return HarmonyResult(status="ok", activities=activities, devices=devices)
-        except DeviceUnavailableError as exc:
-            log.warning("ListConnectedDevices: harmony unavailable: %s", exc)
-            return HarmonyResult(status="unavailable", error=str(exc))
-
-    async def _query_homekit(self) -> HomeKitResult:
-        try:
-            devices = await self._blind.list_devices()
-            log.info("ListConnectedDevices: homekit devices=%d", len(devices))
-            return HomeKitResult(status="ok", devices=devices)
-        except DeviceUnavailableError as exc:
-            log.warning("ListConnectedDevices: homekit unavailable: %s", exc)
-            return HomeKitResult(status="unavailable", error=str(exc))
-
-    async def _query_fritz(self) -> FritzResult:
-        try:
-            devices = await self._thermostat.list_devices()
-            log.info("ListConnectedDevices: fritz devices=%d", len(devices))
-            return FritzResult(status="ok", devices=devices)
-        except DeviceUnavailableError as exc:
-            log.warning("ListConnectedDevices: fritz unavailable: %s", exc)
-            return FritzResult(status="unavailable", error=str(exc))
+        return result

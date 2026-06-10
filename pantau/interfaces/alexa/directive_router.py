@@ -2,11 +2,20 @@
 
 Bearer-token validation is applied as a per-route dependency so that
 /oauth/* and /health endpoints remain accessible without a token.
+
+When ``shared_secret`` is configured, requests must additionally carry a
+timestamped HMAC-SHA256 signature (replay protection for AWS→home traffic):
+``X-Pantau-Timestamp`` (unix seconds) and ``X-Pantau-Signature`` over
+``f"{timestamp}." + raw_body``.
 """
 
 from __future__ import annotations
 
+import hashlib
+import hmac
+import json
 import logging
+import time
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
@@ -17,6 +26,34 @@ from pantau.ports.token_validator_port import TokenValidatorPort
 log = logging.getLogger(__name__)
 
 alexa_router = APIRouter(prefix="/alexa", tags=["alexa"])
+
+_REQUIRED_SCOPE = "alexa"
+
+
+def _require_valid_hmac(
+    request: Request, raw_body: bytes, secret: str, tolerance_seconds: int
+) -> None:
+    """Verify the request HMAC headers; raises HTTP 401 on any mismatch."""
+    timestamp_header = request.headers.get("X-Pantau-Timestamp")
+    signature = request.headers.get("X-Pantau-Signature")
+    if not timestamp_header or not signature:
+        raise HTTPException(status_code=401, detail="Missing HMAC headers")
+
+    try:
+        timestamp = int(timestamp_header)
+    except ValueError as exc:
+        raise HTTPException(status_code=401, detail="Invalid HMAC timestamp") from exc
+
+    if abs(time.time() - timestamp) > tolerance_seconds:
+        log.warning("HMAC timestamp outside accepted window: %d", timestamp)
+        raise HTTPException(status_code=401, detail="HMAC timestamp expired")
+
+    expected = hmac.new(
+        secret.encode(), f"{timestamp}.".encode() + raw_body, hashlib.sha256
+    ).hexdigest()
+    if not hmac.compare_digest(expected, signature):
+        log.warning("HMAC signature mismatch")
+        raise HTTPException(status_code=401, detail="Invalid HMAC signature")
 
 
 def _extract_bearer_token(body: dict) -> str | None:
@@ -37,7 +74,19 @@ def _extract_bearer_token(body: dict) -> str | None:
 @alexa_router.post("/directive")
 async def handle_directive(request: Request) -> JSONResponse:
     """Receive an Alexa Smart Home directive and return an Alexa response."""
-    body = await request.json()
+    raw_body = await request.body()
+
+    settings = request.app.state.settings
+    shared_secret = settings.shared_secret.get_secret_value()
+    if shared_secret:
+        _require_valid_hmac(
+            request, raw_body, shared_secret, settings.hmac_tolerance_seconds
+        )
+
+    try:
+        body = json.loads(raw_body)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=400, detail="Invalid JSON body") from exc
 
     token = _extract_bearer_token(body)
     if not token:
@@ -45,10 +94,16 @@ async def handle_directive(request: Request) -> JSONResponse:
 
     validator: TokenValidatorPort = request.app.state.container.get(TokenValidatorPort)  # type: ignore[type-abstract]
     try:
-        validator.validate(token)
+        claims = validator.validate(token)
     except ValueError as exc:
         log.warning("Bearer token validation failed: %s", exc)
         raise HTTPException(status_code=401, detail="Invalid or expired token") from exc
+
+    if claims.scope != _REQUIRED_SCOPE:
+        log.warning(
+            "Token scope %r lacks required scope %r", claims.scope, _REQUIRED_SCOPE
+        )
+        raise HTTPException(status_code=403, detail="Insufficient scope")
 
     router: AlexaDirectiveRouter = request.app.state.container.get(AlexaDirectiveRouter)
     response = await router.route(body)

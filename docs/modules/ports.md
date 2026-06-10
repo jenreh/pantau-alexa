@@ -5,91 +5,157 @@
 
 Ports are abstract contracts — Python `Protocol` classes that define the interface between use-cases and infrastructure. They're the plugs in the wall: your business logic plugs into ports, and adapters plug into the other side.
 
-Every port is intentionally narrow: it defines only the operations that the commands actually need, nothing more (*Interface Segregation Principle*).
+Every port is intentionally narrow: it defines only the operations that the commands actually need, nothing more (*Interface Segregation Principle*). Device-facing ports are **capability ports** — one port per capability (power, mute, volume, temperature, range), not one port per backend. An adapter implements exactly the capabilities its devices support.
 
 ## Why Protocol instead of ABC?
 
-Python's `typing.Protocol` uses **structural subtyping** (duck typing). Any class with the right methods satisfies the protocol — no `class HarmonyTvAdapter(TvPort):` inheritance needed. This makes it easy to create test doubles without touching the production code.
+Python's `typing.Protocol` uses **structural subtyping** (duck typing). Any class with the right methods satisfies the protocol — no `class HarmonyTvAdapter(PowerablePort):` inheritance needed. This makes it easy to create test doubles without touching the production code.
 
 ```python
-# Production adapter — implicitly satisfies TvPort
+# Production adapter — implicitly satisfies PowerablePort
 class HarmonyTvAdapter:
-    async def ensure_activity(self, activity_name: str) -> None: ...
-    async def set_channel(self, channel_number: str) -> None: ...
+    async def turn_on(self, device: Device) -> None: ...
+    async def turn_off(self, device: Device) -> None: ...
     ...
 
-# Test double — also implicitly satisfies TvPort
+# Test double — also implicitly satisfies PowerablePort
 class MockTvAdapter:
-    async def ensure_activity(self, activity_name: str) -> None: pass
-    async def set_channel(self, channel_number: str) -> None: pass
+    async def turn_on(self, device: Device) -> None: pass
+    async def turn_off(self, device: Device) -> None: pass
     ...
 ```
 
+The capability ports are additionally `@runtime_checkable`, so the container can check `isinstance(adapter, capability)` when resolving a device's adapter.
+
 ---
 
-## TvPort
+## PowerablePort
+
+**File:** `ports/power_port.py`
 
 ```python
-class TvPort(Protocol):
-    async def ensure_activity(self, activity_name: str) -> None:
-        """Start the given Harmony activity if it is not already active."""
+@runtime_checkable
+class PowerablePort(Protocol):
+    async def turn_on(self, device: Device) -> None: ...
 
-    async def set_channel(self, channel_number: str) -> None:
-        """Switch to the given channel number."""
-
-    async def toggle_mute(self) -> None:
-        """Send the mute toggle command (IR-only, no discrete on/off)."""
-
-    async def get_current_activity(self) -> str | None:
-        """Return the currently active Harmony activity label, or None."""
+    async def turn_off(self, device: Device) -> None: ...
 ```
 
 **Implemented by:** `HarmonyTvAdapter` (production), `MockTvAdapter` (tests)
 
 ---
 
-## BlindPort
+## MuteControllablePort
+
+**File:** `ports/mute_port.py`
 
 ```python
-class BlindPort(Protocol):
-    async def set_position(self, homekit_entity_id: str, percent: int) -> None:
-        """Set the blind position (0 = closed, 100 = fully open)."""
+@runtime_checkable
+class MuteControllablePort(Protocol):
+    async def set_mute(self, device: Device, muted: bool) -> None: ...
 
-    async def get_position(self, homekit_entity_id: str) -> int:
-        """Return the current position percentage."""
+    async def get_mute(self, device: Device) -> bool:
+        """Return the current (assumed) mute state."""
 ```
 
-**Implemented by:** `HomeKitBlindAdapter` (production), `MockBlindAdapter` (tests)
+**Implemented by:** `HarmonyTvAdapter` (production), `MockTvAdapter` (tests)
 
 ---
 
-## ThermostatPort
+## VolumeControllablePort
+
+**File:** `ports/volume_port.py`
 
 ```python
-class ThermostatPort(Protocol):
-    async def set_temperature(self, fritz_name: str, celsius: float) -> None:
-        """Set the target temperature for the named thermostat."""
+@runtime_checkable
+class VolumeControllablePort(Protocol):
+    async def set_volume(self, device: Device, level: int) -> None: ...
+
+    async def adjust_volume(self, device: Device, delta: int) -> int:
+        """Adjust volume by delta steps; returns the new assumed level."""
+
+    async def get_volume(self, device: Device) -> int:
+        """Return the current (assumed) volume level."""
+```
+
+**Implemented by:** `HarmonyTvAdapter` (production), `MockTvAdapter` (tests)
+
+---
+
+## TemperatureControllablePort
+
+**File:** `ports/temperature_port.py`
+
+```python
+@runtime_checkable
+class TemperatureControllablePort(Protocol):
+    async def set_temperature(self, device: Device, celsius: float) -> None: ...
+
+    async def get_temperature(self, device: Device) -> float: ...
 ```
 
 **Implemented by:** `FritzThermostatAdapter` (production), `MockThermostatAdapter` (tests)
 
 ---
 
+## RangeControllablePort
+
+**File:** `ports/range_port.py`
+
+```python
+@runtime_checkable
+class RangeControllablePort(Protocol):
+    async def set_range(self, device: Device, value: int) -> None: ...
+
+    async def adjust_range(self, device: Device, delta: int) -> int: ...
+
+    async def get_range(self, device: Device) -> int: ...
+```
+
+Used for devices with a 0–100 position range (currently blinds).
+
+**Implemented by:** `HomeKitBlindAdapter` (production), `MockBlindAdapter` (tests)
+
+---
+
+## ListablePort
+
+**File:** `ports/listable_port.py`
+
+```python
+BackendStatus = Literal["ok", "unavailable"]
+
+@dataclass
+class BackendListResult:
+    """Serialisable result from one backend's list_backend() call."""
+    status: BackendStatus
+    data: dict = field(default_factory=dict)
+    error: str | None = None
+
+@runtime_checkable
+class ListablePort(Protocol):
+    adapter_name: str
+
+    async def list_backend(self) -> BackendListResult: ...
+```
+
+Capability for adapters that can enumerate their live backend devices. `ListConnectedDevicesCommand` queries every registered adapter implementing this port; an offline backend reports `status="unavailable"` with an error message without affecting the others.
+
+**Implemented by:** all production device adapters (`HarmonyTvAdapter`, `HomeKitBlindAdapter`, `FritzThermostatAdapter`)
+
+---
+
 ## DeviceRegistryPort
+
+**File:** `ports/device_registry_port.py`
 
 ```python
 class DeviceRegistryPort(Protocol):
     def get_registry(self) -> DeviceRegistry:
         """Return the full device registry."""
 
-    def find_channel(self, endpoint_id: str) -> ChannelDevice | None:
-        """Find a channel device by Alexa endpoint ID."""
-
-    def find_blind(self, endpoint_id: str) -> BlindDevice | None:
-        """Find a blind device by Alexa endpoint ID."""
-
-    def find_thermostat(self, endpoint_id: str) -> ThermostatDevice | None:
-        """Find a thermostat by Alexa endpoint ID."""
+    def find_device(self, endpoint_id: str) -> Device | None:
+        """Find any configured device by its endpoint ID."""
 ```
 
 Returns `None` (not an exception) when a device is not found — the commands convert `None` to `DeviceNotFoundError`.
@@ -98,17 +164,38 @@ Returns `None` (not an exception) when a device is not found — the commands co
 
 ---
 
-## TokenValidatorPort
+## CapabilityResolverPort
+
+**File:** `ports/capability_resolver_port.py`
 
 ```python
-@dataclass(frozen=True, slots=True)
-class TokenClaims:
+class CapabilityResolverPort(Protocol):
+    def resolve(self, device: Device, capability: type[T]) -> T: ...
+
+    def all_implementing(self, capability: type[T]) -> list[T]: ...
+```
+
+Commands depend on this port instead of importing the `Container` directly. The `Container` in `composition.py` satisfies it structurally: `resolve()` looks up the adapter registered under `device.adapter` and verifies that it implements the requested capability.
+
+**Implemented by:** `Container` (composition root)
+
+---
+
+## TokenValidatorPort
+
+**File:** `ports/token_validator_port.py`
+
+```python
+class TokenClaims(BaseModel):
+    """Validated claims extracted from a bearer token."""
+    model_config = ConfigDict(frozen=True)
+
     user_id: str
     scope: str
 
 class TokenValidatorPort(Protocol):
     def validate(self, token: str) -> TokenClaims:
-        """Validate the Bearer token. Raises ValueError if invalid or expired."""
+        """Validate the token and return its claims. Raises ValueError if invalid."""
 ```
 
 Used by the `/alexa/directive` route to validate the JWT on every incoming directive.
@@ -117,45 +204,121 @@ Used by the `/alexa/directive` route to validate the JWT on every incoming direc
 
 ---
 
-## UserStorePort
+## TokenIssuerPort
+
+**File:** `ports/token_issuer_port.py`
 
 ```python
+class TokenIssuerPort(Protocol):
+    def issue_access_token(self, user_id: str) -> tuple[str, int]:
+        """Return (encoded_token, expires_in_seconds)."""
+
+    def issue_refresh_token(self) -> str:
+        """Return a random, opaque refresh token."""
+```
+
+Used by the OAuth token endpoint to mint access/refresh token pairs.
+
+**Implemented by:** `JwtService` (the same instance also implements `TokenValidatorPort`)
+
+---
+
+## AuthCodeStorePort
+
+**File:** `ports/auth_code_store_port.py`
+
+```python
+class AuthCodeEntry(BaseModel):
+    """A stored authorization code with its binding claims."""
+    model_config = ConfigDict(frozen=True)
+
+    code: str
+    user_id: str
+    client_id: str
+    redirect_uri: str
+    code_challenge: str
+    code_challenge_method: str
+    expires_at: datetime
+
+class AuthCodeStorePort(Protocol):
+    async def save(
+        self, *, user_id: str, client_id: str, redirect_uri: str,
+        code_challenge: str, code_challenge_method: str,
+    ) -> str: ...
+
+    async def lookup(self, code: str) -> AuthCodeEntry | None: ...
+
+    async def redeem(self, code: str) -> AuthCodeEntry | None: ...
+```
+
+Stores single-use PKCE authorization codes. `lookup()` lets the token endpoint validate all claims *before* `redeem()` atomically consumes the code.
+
+**Implemented by:** `AuthCodeStore` (in-memory)
+
+---
+
+## UserStorePort
+
+**File:** `ports/user_store_port.py`
+
+```python
+class UserRecord(BaseModel):
+    """A stored user."""
+    model_config = ConfigDict(frozen=True)
+
+    id: str
+    username: str
+    password_hash: str
+
 class UserStorePort(Protocol):
     async def get_user_by_username(self, username: str) -> UserRecord | None: ...
     async def create_user(self, username: str, password_hash: str) -> UserRecord: ...
     async def save_refresh_token(self, token: str, user_id: str, expires_at: datetime) -> None: ...
-    async def get_refresh_token_user_id(self, token: str) -> str | None: ...
     async def revoke_refresh_token(self, token: str) -> None: ...
+    async def pop_refresh_token(self, token: str) -> str | None: ...
 ```
 
-Used by the OAuth router for user lookups and refresh token lifecycle management.
+Used by the OAuth router for user lookups and refresh token lifecycle management. `pop_refresh_token()` is an atomic check-and-revoke: it returns the user ID and deletes the token in one step, so concurrent refresh requests cannot both succeed.
 
 **Implemented by:** `SqliteUserStore`
 
 ---
 
-## BeaconPublisherPort
+## PasswordHasherPort
+
+**File:** `ports/password_hasher_port.py`
 
 ```python
-class BeaconPublisherPort(Protocol):
-    async def publish(self, base_url: str) -> None:
-        """Write {base_url, updated_at, health} to S3 endpoint.json."""
+class PasswordHasherPort(Protocol):
+    def hash_password(self, plain: str) -> str: ...
+
+    def verify_password(self, plain: str, hashed: str | None) -> bool: ...
 ```
 
-::: info Phase 5 — planned
-This port is defined but has no production adapter yet. The `S3BeaconPublisher` adapter will be implemented in Phase 5. The home server will call `publish()` at startup and periodically to keep the S3 beacon up-to-date with the current tunnel URL.
-:::
+`verify_password` accepts `hashed=None` for unknown users: the implementation must burn comparable CPU time against a dummy hash and return `False`, so login latency does not reveal whether a username exists.
+
+**Implemented by:** `BcryptPasswordHasher`
 
 ---
 
 ## Port-to-adapter mapping
 
+Capability ports are resolved **per device** via `Container.resolve(device, capability)`, keyed by the device's `adapter` field (`harmony`, `homekit`, `fritz`):
+
+| Adapter name | Production adapter | Test double | Capabilities |
+|---|---|---|---|
+| `harmony` | `HarmonyTvAdapter` | `MockTvAdapter` | `PowerablePort`, `MuteControllablePort`, `VolumeControllablePort`, `ListablePort` |
+| `homekit` | `HomeKitBlindAdapter` | `MockBlindAdapter` | `RangeControllablePort`, `ListablePort` |
+| `fritz` | `FritzThermostatAdapter` | `MockThermostatAdapter` | `TemperatureControllablePort`, `ListablePort` |
+
+Infrastructure ports are registered once under their port type:
+
 | Port | Production adapter | Test double |
 |---|---|---|
-| `TvPort` | `HarmonyTvAdapter` | `MockTvAdapter` |
-| `BlindPort` | `HomeKitBlindAdapter` | `MockBlindAdapter` |
-| `ThermostatPort` | `FritzThermostatAdapter` | `MockThermostatAdapter` |
 | `DeviceRegistryPort` | `YamlDeviceRegistry` | `YamlDeviceRegistry` (test fixtures) |
+| `CapabilityResolverPort` | `Container` | `Container` |
 | `TokenValidatorPort` | `JwtService` | `MockTokenValidator` |
+| `TokenIssuerPort` | `JwtService` | `JwtService` (OAuth tests) |
+| `AuthCodeStorePort` | `AuthCodeStore` | `AuthCodeStore` |
 | `UserStorePort` | `SqliteUserStore` | `SqliteUserStore` (in-memory `:memory:`) |
-| `BeaconPublisherPort` | *(planned: S3BeaconPublisher)* | — |
+| `PasswordHasherPort` | `BcryptPasswordHasher` | `BcryptPasswordHasher` |

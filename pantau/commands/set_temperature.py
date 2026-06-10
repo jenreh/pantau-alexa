@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 
 from pantau.commands._base import DeviceCommand
-from pantau.domain.errors import DeviceCapabilityError, DeviceNotFoundError
+from pantau.domain.errors import DeviceCapabilityError
 from pantau.domain.models import Thermostat
 from pantau.domain.values import Temperature
 from pantau.ports.temperature_port import TemperatureControllablePort
@@ -14,10 +14,9 @@ log = logging.getLogger(__name__)
 
 
 class SetTemperatureCommand(DeviceCommand):
-    async def execute(self, endpoint_id: str, celsius: float) -> None:
-        device = self._registry.find_device(endpoint_id)
-        if device is None:
-            raise DeviceNotFoundError(endpoint_id)
+    async def execute(self, endpoint_id: str, celsius: float) -> float:
+        """Set the target temperature; returns the applied (0.5-rounded) value."""
+        device = self._find_device(endpoint_id)
         if not isinstance(device, Thermostat):
             raise DeviceCapabilityError(endpoint_id, "TemperatureControllable")
         temp = Temperature.from_float(celsius)
@@ -34,3 +33,4 @@ class SetTemperatureCommand(DeviceCommand):
             device.adapter,
         )
         await adapter.set_temperature(device, temp.celsius)
+        return temp.celsius

@@ -2,26 +2,33 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict
+
+AdapterName = Literal["harmony", "homekit", "fritz"]
+
+ADAPTER_HARMONY: AdapterName = "harmony"
+ADAPTER_HOMEKIT: AdapterName = "homekit"
+ADAPTER_FRITZ: AdapterName = "fritz"
 
 
 class Device(BaseModel):
     """Base class for all domain devices.
 
-    ``adapter`` names the backend that owns this device (e.g. ``"homekit"``,
-    ``"harmony"``, ``"fritz"``).  A generic command can use it to route to the
-    right port without hard-coding the type check:
+    ``adapter`` names the backend that owns this device.  A generic command can
+    use it to route to the right port without hard-coding the type check:
 
         async def turn_on(device: Device) -> None:
-            port = container.get_by_adapter(device.adapter)
-            await port.turn_on(device.id)
+            port = container.resolve(device, PowerablePort)
+            await port.turn_on(device)
     """
 
     model_config = ConfigDict(frozen=True)
 
     id: str
     name: str
-    adapter: str
+    adapter: AdapterName
     aliases: tuple[str, ...] = ()
 
 
@@ -34,6 +41,7 @@ class TvChannel(Device):
     """A TV channel exposed as an Alexa PowerController endpoint."""
 
     channel_number: str = ""
+    watch_activity: str = ""
 
 
 class TvAudio(Device):
@@ -81,6 +89,10 @@ class DeviceRegistry(BaseModel):
     tv: Tv
     blinds: tuple[WindowBlind, ...]
     thermostats: tuple[Thermostat, ...]
+
+    def all_devices(self) -> tuple[Device, ...]:
+        """Every configured device, regardless of type."""
+        return (self.tv.audio, *self.tv.channels, *self.blinds, *self.thermostats)
 
 
 # ---------------------------------------------------------------------------

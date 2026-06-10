@@ -11,23 +11,11 @@ import logging
 import secrets
 from datetime import UTC, datetime, timedelta
 
-from pydantic import BaseModel, ConfigDict
+from pantau.ports.auth_code_store_port import AuthCodeEntry
 
 log = logging.getLogger(__name__)
 
 _CODE_TTL_SECONDS = 300  # 5 minutes
-
-
-class AuthCodeEntry(BaseModel):
-    model_config = ConfigDict(frozen=True)
-
-    code: str
-    user_id: str
-    client_id: str
-    redirect_uri: str
-    code_challenge: str
-    code_challenge_method: str
-    expires_at: datetime
 
 
 class AuthCodeStore:

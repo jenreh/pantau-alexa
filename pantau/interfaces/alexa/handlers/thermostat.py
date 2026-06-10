@@ -1,77 +1,84 @@
-"""Alexa.ThermostatController handler — SetTargetTemperature."""
+"""Alexa.ThermostatController handler — SetTargetTemperature / AdjustTargetTemperature."""
 
 from __future__ import annotations
 
 import logging
+from typing import cast
 
-from pantau.commands.heating.set_thermostat_temperature import (
-    SetThermostatTemperatureCommand,
+from pantau.commands.adjust_temperature import AdjustTemperatureCommand
+from pantau.commands.set_temperature import SetTemperatureCommand
+from pantau.interfaces.alexa.handlers._base import (
+    AlexaHandler,
+    DirectiveContext,
+    InvalidPayloadError,
+    require_field,
 )
-from pantau.domain.errors import DeviceNotFoundError, DeviceUnavailableError
-from pantau.interfaces.alexa.models import AlexaDirectiveRequest
-from pantau.interfaces.alexa.response_builder import (
-    build_error_response,
-    build_property,
-    build_response,
-)
+from pantau.interfaces.alexa.response_builder import build_property
 
 log = logging.getLogger(__name__)
 
-_FAHRENHEIT_TO_CELSIUS = lambda f: (f - 32) * 5 / 9  # noqa: E731
+_KELVIN_OFFSET = 273.15
 
 
 def _to_celsius(value: float, scale: str) -> float:
+    """Convert an absolute temperature to Celsius."""
     if scale == "CELSIUS":
         return value
     if scale == "FAHRENHEIT":
-        return _FAHRENHEIT_TO_CELSIUS(value)
+        return (value - 32) * 5 / 9
+    if scale == "KELVIN":
+        return value - _KELVIN_OFFSET
     raise ValueError(f"Unsupported temperature scale: {scale!r}")
 
 
-class ThermostatHandler:
-    def __init__(self, set_temperature: SetThermostatTemperatureCommand) -> None:
+def _delta_to_celsius(value: float, scale: str) -> float:
+    """Convert a temperature *delta* to Celsius (factor only, no offset)."""
+    if scale in ("CELSIUS", "KELVIN"):
+        return value
+    if scale == "FAHRENHEIT":
+        return value * 5 / 9
+    raise ValueError(f"Unsupported temperature scale: {scale!r}")
+
+
+def _temperature_payload(payload: dict, field: str) -> tuple[float, str]:
+    """Extract {value, scale} from a required temperature payload field."""
+    raw = require_field(payload, field)
+    if not isinstance(raw, dict):
+        raise InvalidPayloadError(f"Payload field {field!r} must be an object")
+    data = cast("dict[str, object]", raw)
+    value = data.get("value")
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        raise InvalidPayloadError(
+            f"Payload field {field!r} must contain a numeric 'value'"
+        )
+    return float(value), str(data.get("scale", "CELSIUS"))
+
+
+class ThermostatHandler(AlexaHandler):
+    def __init__(
+        self,
+        set_temperature: SetTemperatureCommand,
+        adjust_temperature: AdjustTemperatureCommand,
+    ) -> None:
         self._set_temperature = set_temperature
+        self._adjust_temperature = adjust_temperature
 
-    async def handle(self, req: AlexaDirectiveRequest) -> dict:
-        header = req.directive.header
-        endpoint = req.directive.endpoint
-        endpoint_id = endpoint.endpointId if endpoint else ""
-        correlation_token = header.correlationToken
-        bearer_token = endpoint.scope.token if endpoint and endpoint.scope else None
+    async def _execute(self, ctx: DirectiveContext) -> list[dict]:
+        if ctx.name == "AdjustTargetTemperature":
+            value, scale = _temperature_payload(ctx.payload, "targetSetpointDelta")
+            applied = await self._adjust_temperature.execute(
+                ctx.endpoint_id, delta_celsius=_delta_to_celsius(value, scale)
+            )
+        else:  # SetTargetTemperature
+            value, scale = _temperature_payload(ctx.payload, "targetSetpoint")
+            applied = await self._set_temperature.execute(
+                ctx.endpoint_id, celsius=_to_celsius(value, scale)
+            )
 
-        try:
-            target = req.directive.payload.get("targetSetpoint", {})
-            raw_value: float = float(target.get("value", 0.0))
-            scale: str = target.get("scale", "CELSIUS")
-            celsius = _to_celsius(raw_value, scale)
-
-            await self._set_temperature.execute(endpoint_id, celsius=celsius)
-            properties = [
-                build_property(
-                    "Alexa.ThermostatController",
-                    "targetSetpoint",
-                    {"value": celsius, "scale": "CELSIUS"},
-                ),
-            ]
-            return build_response(
-                correlation_token, endpoint_id, bearer_token, properties
-            )
-        except ValueError as exc:
-            return build_error_response(
-                correlation_token, endpoint_id, "VALUE_OUT_OF_RANGE", str(exc)
-            )
-        except DeviceNotFoundError as exc:
-            return build_error_response(
-                correlation_token, endpoint_id, "NO_SUCH_ENDPOINT", str(exc)
-            )
-        except DeviceUnavailableError as exc:
-            return build_error_response(
-                correlation_token, endpoint_id, "ENDPOINT_UNREACHABLE", str(exc)
-            )
-        except Exception as exc:
-            log.exception(
-                "ThermostatHandler: unexpected error for endpoint=%s", endpoint_id
-            )
-            return build_error_response(
-                correlation_token, endpoint_id, "INTERNAL_ERROR", str(exc)
-            )
+        return [
+            build_property(
+                "Alexa.ThermostatController",
+                "targetSetpoint",
+                {"value": applied, "scale": "CELSIUS"},
+            ),
+        ]

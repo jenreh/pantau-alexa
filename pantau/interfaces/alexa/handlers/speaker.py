@@ -1,56 +1,53 @@
-"""Alexa.Speaker handler — SetMute for the TV audio endpoint."""
+"""Alexa.Speaker handler — SetMute, SetVolume, AdjustVolume."""
 
 from __future__ import annotations
 
 import logging
 
-from pantau.commands.tv.set_tv_mute import SetTvMuteCommand
-from pantau.domain.errors import DeviceNotFoundError, DeviceUnavailableError
-from pantau.interfaces.alexa.models import AlexaDirectiveRequest
-from pantau.interfaces.alexa.response_builder import (
-    build_error_response,
-    build_property,
-    build_response,
+from pantau.commands.adjust_volume import AdjustVolumeCommand
+from pantau.commands.get_speaker_state import GetSpeakerStateCommand
+from pantau.commands.set_mute import SetMuteCommand
+from pantau.commands.set_volume import SetVolumeCommand
+from pantau.interfaces.alexa.handlers._base import (
+    AlexaHandler,
+    DirectiveContext,
+    InvalidPayloadError,
+    require_field,
+    require_int,
 )
+from pantau.interfaces.alexa.response_builder import build_property
 
 log = logging.getLogger(__name__)
 
 
-class SpeakerHandler:
-    def __init__(self, set_mute: SetTvMuteCommand) -> None:
+class SpeakerHandler(AlexaHandler):
+    def __init__(
+        self,
+        set_mute: SetMuteCommand,
+        set_volume: SetVolumeCommand,
+        adjust_volume: AdjustVolumeCommand,
+        get_speaker_state: GetSpeakerStateCommand,
+    ) -> None:
         self._set_mute = set_mute
+        self._set_volume = set_volume
+        self._adjust_volume = adjust_volume
+        self._get_speaker_state = get_speaker_state
 
-    async def handle(self, req: AlexaDirectiveRequest) -> dict:
-        header = req.directive.header
-        endpoint = req.directive.endpoint
-        endpoint_id = endpoint.endpointId if endpoint else ""
-        correlation_token = header.correlationToken
-        bearer_token = endpoint.scope.token if endpoint and endpoint.scope else None
+    async def _execute(self, ctx: DirectiveContext) -> list[dict]:
+        if ctx.name == "SetMute":
+            mute = require_field(ctx.payload, "mute")
+            if not isinstance(mute, bool):
+                raise InvalidPayloadError("Payload field 'mute' must be a boolean")
+            await self._set_mute.execute(ctx.endpoint_id, mute=mute)
+        elif ctx.name == "SetVolume":
+            volume = require_int(ctx.payload, "volume")
+            await self._set_volume.execute(ctx.endpoint_id, level=volume)
+        else:  # AdjustVolume
+            delta = require_int(ctx.payload, "volume")
+            await self._adjust_volume.execute(ctx.endpoint_id, delta=delta)
 
-        mute: bool = bool(req.directive.payload.get("mute", False))
-
-        try:
-            await self._set_mute.execute(endpoint_id, mute=mute)
-            properties = [
-                build_property("Alexa.Speaker", "muted", mute),
-                # volume is not tracked by this server; report a static assumed value
-                build_property("Alexa.Speaker", "volume", 50, uncertainty_ms=0),
-            ]
-            return build_response(
-                correlation_token, endpoint_id, bearer_token, properties
-            )
-        except DeviceNotFoundError as exc:
-            return build_error_response(
-                correlation_token, endpoint_id, "NO_SUCH_ENDPOINT", str(exc)
-            )
-        except DeviceUnavailableError as exc:
-            return build_error_response(
-                correlation_token, endpoint_id, "ENDPOINT_UNREACHABLE", str(exc)
-            )
-        except Exception as exc:
-            log.exception(
-                "SpeakerHandler: unexpected error for endpoint=%s", endpoint_id
-            )
-            return build_error_response(
-                correlation_token, endpoint_id, "INTERNAL_ERROR", str(exc)
-            )
+        muted, volume_level = await self._get_speaker_state.execute(ctx.endpoint_id)
+        return [
+            build_property("Alexa.Speaker", "muted", muted),
+            build_property("Alexa.Speaker", "volume", volume_level),
+        ]

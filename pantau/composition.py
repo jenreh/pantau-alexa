@@ -7,6 +7,7 @@ FastAPI dependency injection.
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterable
 from pathlib import Path
 from typing import Protocol, TypeVar, cast, runtime_checkable
 
@@ -19,29 +20,35 @@ from pantau.adapters.mock_blind_adapter import MockBlindAdapter
 from pantau.adapters.mock_thermostat_adapter import MockThermostatAdapter
 from pantau.adapters.mock_token_validator import MockTokenValidator
 from pantau.adapters.mock_tv_adapter import MockTvAdapter
+from pantau.adapters.password_hasher import BcryptPasswordHasher
 from pantau.adapters.sqlite_user_store import SqliteUserStore
 from pantau.adapters.yaml_device_registry import YamlDeviceRegistry
-from pantau.commands.blinds.adjust_blind_position import AdjustBlindPositionCommand
-from pantau.commands.blinds.set_blind_position import SetBlindPositionCommand
+from pantau.commands.adjust_range import AdjustRangeCommand
+from pantau.commands.adjust_temperature import AdjustTemperatureCommand
+from pantau.commands.adjust_volume import AdjustVolumeCommand
 from pantau.commands.discover_devices import DiscoverDevicesCommand
-from pantau.commands.heating.set_thermostat_temperature import (
-    SetThermostatTemperatureCommand,
-)
+from pantau.commands.get_speaker_state import GetSpeakerStateCommand
 from pantau.commands.list_connected_devices import ListConnectedDevicesCommand
-from pantau.commands.tv.activate_channel import ActivateChannelCommand
-from pantau.commands.tv.set_tv_mute import SetTvMuteCommand
+from pantau.commands.set_mute import SetMuteCommand
+from pantau.commands.set_range import SetRangeCommand
+from pantau.commands.set_temperature import SetTemperatureCommand
+from pantau.commands.set_volume import SetVolumeCommand
+from pantau.commands.turn_off import TurnOffCommand
+from pantau.commands.turn_on import TurnOnCommand
 from pantau.config.settings import Settings
+from pantau.domain.errors import DeviceCapabilityError, DeviceUnavailableError
+from pantau.domain.models import ADAPTER_FRITZ, ADAPTER_HARMONY, ADAPTER_HOMEKIT, Device
 from pantau.interfaces.alexa.handlers.discovery import DiscoveryHandler
 from pantau.interfaces.alexa.handlers.power import PowerHandler
 from pantau.interfaces.alexa.handlers.range import RangeHandler
 from pantau.interfaces.alexa.handlers.speaker import SpeakerHandler
 from pantau.interfaces.alexa.handlers.thermostat import ThermostatHandler
 from pantau.interfaces.alexa.router import AlexaDirectiveRouter
-from pantau.ports.blind_port import BlindPort
+from pantau.ports.auth_code_store_port import AuthCodeStorePort
 from pantau.ports.device_registry_port import DeviceRegistryPort
-from pantau.ports.thermostat_port import ThermostatPort
+from pantau.ports.password_hasher_port import PasswordHasherPort
+from pantau.ports.token_issuer_port import TokenIssuerPort
 from pantau.ports.token_validator_port import TokenValidatorPort
-from pantau.ports.tv_port import TvPort
 from pantau.ports.user_store_port import UserStorePort
 
 log = logging.getLogger(__name__)
@@ -59,7 +66,7 @@ class Lifecycle(Protocol):
 
 
 class Container:
-    """Type-keyed adapter registry.
+    """Type-keyed adapter registry with device-centric capability resolution.
 
     Register adapters once at startup; retrieve by port type anywhere.
     Adding a new adapter requires only one `.register()` call here —
@@ -69,7 +76,7 @@ class Container:
     def __init__(self) -> None:
         self._store: dict[type, object] = {}
         self._order: list[type] = []
-        self._by_adapter: dict[str, type] = {}
+        self._by_adapter: dict[str, object] = {}  # adapter_name → instance
 
     def register(
         self, port: type[T], adapter: T, *, adapter_name: str | None = None
@@ -77,14 +84,14 @@ class Container:
         """Register *adapter* under *port*. Returns self for chaining.
 
         Pass *adapter_name* (e.g. ``"harmony"``) to also make the adapter
-        retrievable via :meth:`get_by_adapter`.
+        retrievable via :meth:`resolve`.
         """
         if port in self._store:
             self._order.remove(port)
         self._store[port] = adapter
         self._order.append(port)
         if adapter_name is not None:
-            self._by_adapter[adapter_name] = port
+            self._by_adapter[adapter_name] = adapter
         return self
 
     def get(self, port: type[T]) -> T:
@@ -93,16 +100,41 @@ class Container:
             raise KeyError(f"No adapter registered for {port.__name__!r}")
         return cast(T, self._store[port])
 
-    def get_by_adapter(self, adapter_name: str) -> object:
-        """Return the adapter registered under *adapter_name*, or raise KeyError."""
+    def resolve(self, device: Device, capability: type[T]) -> T:
+        """Return the adapter for *device.adapter* that implements *capability*.
+
+        Raises DeviceUnavailableError if no adapter is registered for the
+        adapter name, or DeviceCapabilityError if the adapter does not
+        implement the capability — so handlers map them to proper Alexa
+        error types instead of INTERNAL_ERROR.
+        """
+        adapter_name = device.adapter
         if adapter_name not in self._by_adapter:
-            raise KeyError(f"No adapter registered for name {adapter_name!r}")
-        return self._store[self._by_adapter[adapter_name]]
+            raise DeviceUnavailableError(f"No adapter registered for {adapter_name!r}")
+        adapter = self._by_adapter[adapter_name]
+        if not isinstance(adapter, capability):  # type: ignore[arg-type]
+            raise DeviceCapabilityError(device.id, capability.__name__)
+        return adapter  # type: ignore[return-value]
+
+    def all_implementing(self, capability: type[T]) -> list[T]:
+        """Return all distinct registered adapters that implement *capability*."""
+        return self._unique_instances(self._by_adapter.values(), capability)
 
     @property
     def lifecycle_adapters(self) -> list[Lifecycle]:
-        """Adapters with start/stop, in registration order."""
-        return [a for t in self._order if isinstance(a := self._store[t], Lifecycle)]
+        """Adapters with start/stop, in registration order, deduped by instance."""
+        return self._unique_instances((self._store[t] for t in self._order), Lifecycle)
+
+    def _unique_instances(
+        self, source: Iterable[object], capability: type[T]
+    ) -> list[T]:
+        seen: set[int] = set()
+        result: list[T] = []
+        for obj in source:
+            if id(obj) not in seen and isinstance(obj, capability):  # type: ignore[arg-type]
+                seen.add(id(obj))
+                result.append(obj)  # type: ignore[arg-type]
+        return result
 
 
 def build_container(settings: Settings) -> Container:
@@ -110,20 +142,28 @@ def build_container(settings: Settings) -> Container:
     registry = YamlDeviceRegistry(settings.devices_config_path)
     log.info("Building dependency container (real adapters)")
 
-    jwt_service = JwtService(settings)
+    harmony = HarmonyTvAdapter()
+    homekit = HomeKitBlindAdapter()
+    fritz = FritzThermostatAdapter()
+    jwt_service = JwtService(
+        settings.jwt_secret.get_secret_value(),
+        algorithm=settings.jwt_algorithm,
+        access_token_expire_minutes=settings.jwt_access_token_expire_minutes,
+    )
     user_store = SqliteUserStore(settings.users_db_path)
     auth_codes = AuthCodeStore()
 
     container = (
         Container()
         .register(DeviceRegistryPort, registry)  # type: ignore[type-abstract]
-        .register(TvPort, HarmonyTvAdapter(), adapter_name="harmony")  # type: ignore[type-abstract]
-        .register(BlindPort, HomeKitBlindAdapter(), adapter_name="homekit")  # type: ignore[type-abstract]
-        .register(ThermostatPort, FritzThermostatAdapter(), adapter_name="fritz")  # type: ignore[type-abstract]
+        .register(HarmonyTvAdapter, harmony, adapter_name=ADAPTER_HARMONY)
+        .register(HomeKitBlindAdapter, homekit, adapter_name=ADAPTER_HOMEKIT)
+        .register(FritzThermostatAdapter, fritz, adapter_name=ADAPTER_FRITZ)
         .register(TokenValidatorPort, jwt_service)  # type: ignore[type-abstract]
-        .register(JwtService, jwt_service)
+        .register(TokenIssuerPort, jwt_service)  # type: ignore[type-abstract]
         .register(UserStorePort, user_store)  # type: ignore[type-abstract]
-        .register(AuthCodeStore, auth_codes)
+        .register(AuthCodeStorePort, auth_codes)  # type: ignore[type-abstract]
+        .register(PasswordHasherPort, BcryptPasswordHasher())  # type: ignore[type-abstract]
     )
 
     _wire_commands_and_router(container)
@@ -133,36 +173,47 @@ def build_container(settings: Settings) -> Container:
 def _wire_commands_and_router(container: Container) -> None:
     """Instantiate commands as singletons and wire the Alexa directive router."""
     registry_port = container.get(DeviceRegistryPort)  # type: ignore[type-abstract]
-    tv_port = container.get(TvPort)  # type: ignore[type-abstract]
-    blind_port = container.get(BlindPort)  # type: ignore[type-abstract]
-    thermostat_port = container.get(ThermostatPort)  # type: ignore[type-abstract]
 
-    # Commands — singletons so SetTvMuteCommand preserves assumed mute state
-    activate_channel = ActivateChannelCommand(registry_port, tv_port)
-    set_mute = SetTvMuteCommand(registry_port, tv_port)
-    set_temperature = SetThermostatTemperatureCommand(registry_port, thermostat_port)
-    set_blind = SetBlindPositionCommand(registry_port, blind_port)
-    adjust_blind = AdjustBlindPositionCommand(registry_port, blind_port)
+    # Container satisfies CapabilityResolverPort structurally but mypy cannot verify
+    # generic Protocol conformance at call sites — suppress until PEP 673 / mypy #4717.
+    turn_on = TurnOnCommand(registry_port, container)  # type: ignore[arg-type]
+    turn_off = TurnOffCommand(registry_port, container)  # type: ignore[arg-type]
+    set_mute = SetMuteCommand(registry_port, container)  # type: ignore[arg-type]
+    set_volume = SetVolumeCommand(registry_port, container)  # type: ignore[arg-type]
+    adjust_volume = AdjustVolumeCommand(registry_port, container)  # type: ignore[arg-type]
+    get_speaker_state = GetSpeakerStateCommand(registry_port, container)  # type: ignore[arg-type]
+    set_range = SetRangeCommand(registry_port, container)  # type: ignore[arg-type]
+    adjust_range = AdjustRangeCommand(registry_port, container)  # type: ignore[arg-type]
+    set_temperature = SetTemperatureCommand(registry_port, container)  # type: ignore[arg-type]
+    adjust_temperature = AdjustTemperatureCommand(
+        registry_port,
+        container,  # type: ignore[arg-type]
+        set_temperature,
+    )
     discover = DiscoverDevicesCommand(registry_port)
+    list_connected = ListConnectedDevicesCommand(container)  # type: ignore[arg-type]
 
-    list_connected = ListConnectedDevicesCommand(tv_port, blind_port, thermostat_port)
-
-    container.register(ActivateChannelCommand, activate_channel)
-    container.register(SetTvMuteCommand, set_mute)
-    container.register(SetThermostatTemperatureCommand, set_temperature)
-    container.register(SetBlindPositionCommand, set_blind)
-    container.register(AdjustBlindPositionCommand, adjust_blind)
+    container.register(TurnOnCommand, turn_on)
+    container.register(TurnOffCommand, turn_off)
+    container.register(SetMuteCommand, set_mute)
+    container.register(SetVolumeCommand, set_volume)
+    container.register(AdjustVolumeCommand, adjust_volume)
+    container.register(GetSpeakerStateCommand, get_speaker_state)
+    container.register(SetRangeCommand, set_range)
+    container.register(AdjustRangeCommand, adjust_range)
+    container.register(SetTemperatureCommand, set_temperature)
+    container.register(AdjustTemperatureCommand, adjust_temperature)
     container.register(DiscoverDevicesCommand, discover)
     container.register(ListConnectedDevicesCommand, list_connected)
 
-    # Handlers
-    power_handler = PowerHandler(activate_channel)
-    speaker_handler = SpeakerHandler(set_mute)
-    thermostat_handler = ThermostatHandler(set_temperature)
-    range_handler = RangeHandler(set_blind, adjust_blind)
+    power_handler = PowerHandler(turn_on, turn_off)
+    speaker_handler = SpeakerHandler(
+        set_mute, set_volume, adjust_volume, get_speaker_state
+    )
+    thermostat_handler = ThermostatHandler(set_temperature, adjust_temperature)
+    range_handler = RangeHandler(set_range, adjust_range)
     discovery_handler = DiscoveryHandler(discover)
 
-    # Alexa directive router
     alexa_router = AlexaDirectiveRouter(
         power=power_handler,
         speaker=speaker_handler,
@@ -180,12 +231,17 @@ def build_test_container(devices_config_path: Path) -> Container:
     """Build a container with mock adapters — for integration tests only."""
     registry = YamlDeviceRegistry(devices_config_path)
     log.debug("Building test container (mock adapters)")
+
+    mock_tv = MockTvAdapter()
+    mock_blind = MockBlindAdapter()
+    mock_thermostat = MockThermostatAdapter()
+
     container = (
         Container()
         .register(DeviceRegistryPort, registry)  # type: ignore[type-abstract]
-        .register(TvPort, MockTvAdapter())  # type: ignore[type-abstract]
-        .register(BlindPort, MockBlindAdapter())  # type: ignore[type-abstract]
-        .register(ThermostatPort, MockThermostatAdapter())  # type: ignore[type-abstract]
+        .register(MockTvAdapter, mock_tv, adapter_name=ADAPTER_HARMONY)
+        .register(MockBlindAdapter, mock_blind, adapter_name=ADAPTER_HOMEKIT)
+        .register(MockThermostatAdapter, mock_thermostat, adapter_name=ADAPTER_FRITZ)
         .register(TokenValidatorPort, MockTokenValidator())  # type: ignore[type-abstract]
     )
     _wire_commands_and_router(container)
@@ -201,8 +257,9 @@ def build_oauth_test_container(
     """Container for OAuth integration tests — in-memory SQLite + real JWT service."""
     container = build_test_container(devices_config_path)
     # Override TokenValidatorPort with the real JwtService for OAuth tests
-    container.register(JwtService, jwt_service)
     container.register(TokenValidatorPort, jwt_service)  # type: ignore[type-abstract]
+    container.register(TokenIssuerPort, jwt_service)  # type: ignore[type-abstract]
     container.register(UserStorePort, user_store)  # type: ignore[type-abstract]
-    container.register(AuthCodeStore, auth_codes)
+    container.register(AuthCodeStorePort, auth_codes)  # type: ignore[type-abstract]
+    container.register(PasswordHasherPort, BcryptPasswordHasher())  # type: ignore[type-abstract]
     return container

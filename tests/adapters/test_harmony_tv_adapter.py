@@ -10,6 +10,7 @@ from harmonyhub.models import ActivityStatus, ChannelResult, CommandResult
 
 from pantau.adapters.harmony_tv_adapter import HarmonyTvAdapter
 from pantau.domain.errors import DeviceUnavailableError
+from pantau.domain.models import TvAudio, TvChannel
 
 
 class FakeHub:
@@ -36,6 +37,7 @@ class FakeHub:
         self.started_activities: list[str] = []
         self.set_channel_calls: list[str] = []
         self.send_key_calls: list[str] = []
+        self.power_off_calls = 0
 
     async def connect(self) -> None:
         self.connect_count += 1
@@ -76,6 +78,13 @@ class FakeHub:
             success=self._mute_success,
             error=None if self._mute_success else "send_key error",
         )
+
+    async def power_off(self) -> ActivityStatus:
+        if self._raise_on_operation:
+            raise self._raise_on_operation
+        self.power_off_calls += 1
+        self._current = ActivityStatus(activity_id="-1", activity_label="PowerOff")
+        return self._current
 
 
 class FakeService:
@@ -120,15 +129,15 @@ class TestLifecycle:
         assert hub.close_count == 0
 
     async def test_each_operation_opens_and_closes_service(self) -> None:
-        hub = FakeHub()
-        await _adapter(hub).get_current_activity()
+        hub = FakeHub(current_activity_label="Fernseher")
+        await _adapter(hub).ensure_activity("Fernseher")
         assert hub.connect_count == 1
         assert hub.close_count == 1
 
     async def test_connect_error_raises_device_unavailable(self) -> None:
         hub = FakeHub(raise_on_connect=HubUnavailableError("timeout"))
         with pytest.raises(DeviceUnavailableError):
-            await _adapter(hub).get_current_activity()
+            await _adapter(hub).ensure_activity("Fernseher")
 
 
 # ---------------------------------------------------------------------------
@@ -198,17 +207,233 @@ class TestToggleMute:
 
 
 # ---------------------------------------------------------------------------
-# get_current_activity
+# turn_on (PowerablePort)
 # ---------------------------------------------------------------------------
 
 
-class TestGetCurrentActivity:
-    async def test_returns_activity_label(self) -> None:
-        hub = FakeHub(current_activity_label="Fernseher")
-        label = await _adapter(hub).get_current_activity()
-        assert label == "Fernseher"
+def _channel(channel_number: str = "2", watch_activity: str = "Fernseher") -> TvChannel:
+    return TvChannel(
+        id="zdf",
+        name="ZDF",
+        adapter="harmony",
+        channel_number=channel_number,
+        watch_activity=watch_activity,
+    )
 
-    async def test_returns_none_for_power_off(self) -> None:
-        hub = FakeHub(current_activity_label=None)
-        label = await _adapter(hub).get_current_activity()
-        assert label is None
+
+def _audio() -> TvAudio:
+    return TvAudio(id="tv-audio", name="Fernseher", adapter="harmony")
+
+
+class TestTurnOn:
+    async def test_turn_on_channel_ensures_activity_and_sets_channel(self) -> None:
+        hub = FakeHub(current_activity_label="PowerOff")
+        await _adapter(hub).turn_on(_channel())
+        assert hub.started_activities == ["Fernseher"]
+        assert hub.set_channel_calls == ["2"]
+
+    async def test_turn_on_channel_skips_activity_if_already_active(self) -> None:
+        hub = FakeHub(current_activity_label="Fernseher")
+        await _adapter(hub).turn_on(_channel())
+        assert hub.started_activities == []
+        assert hub.set_channel_calls == ["2"]
+
+    async def test_turn_on_non_channel_device_is_noop(self) -> None:
+        hub = FakeHub()
+        await _adapter(hub).turn_on(_audio())
+        assert hub.started_activities == []
+        assert hub.set_channel_calls == []
+        assert hub.send_key_calls == []
+
+
+class TestTurnOff:
+    async def test_turn_off_powers_off_current_activity(self) -> None:
+        hub = FakeHub(current_activity_label="Fernseher")
+        await _adapter(hub).turn_off(_channel())
+        assert hub.power_off_calls == 1
+
+    async def test_turn_off_hub_error_raises_unavailable(self) -> None:
+        hub = FakeHub(raise_on_operation=HubUnavailableError("down"))
+        with pytest.raises(DeviceUnavailableError):
+            await _adapter(hub).turn_off(_channel())
+
+
+# ---------------------------------------------------------------------------
+# set_mute (MuteControllablePort)
+# ---------------------------------------------------------------------------
+
+
+class TestSetMute:
+    async def test_mute_true_sends_toggle_when_unmuted(self) -> None:
+        hub = FakeHub()
+        adapter = _adapter(hub)
+        await adapter.set_mute(_audio(), muted=True)
+        assert hub.send_key_calls == ["mute"]
+
+    async def test_mute_true_skips_toggle_when_already_muted(self) -> None:
+        hub = FakeHub()
+        adapter = _adapter(hub)
+        await adapter.set_mute(_audio(), muted=True)
+        hub.send_key_calls.clear()
+        await adapter.set_mute(_audio(), muted=True)
+        assert hub.send_key_calls == []
+
+    async def test_mute_false_sends_toggle_when_muted(self) -> None:
+        hub = FakeHub()
+        adapter = _adapter(hub)
+        await adapter.set_mute(_audio(), muted=True)  # → now muted
+        hub.send_key_calls.clear()
+        await adapter.set_mute(_audio(), muted=False)  # → unmute
+        assert hub.send_key_calls == ["mute"]
+
+    async def test_mute_false_skips_toggle_when_already_unmuted(self) -> None:
+        hub = FakeHub()
+        adapter = _adapter(hub)
+        await adapter.set_mute(_audio(), muted=False)
+        assert hub.send_key_calls == []
+
+    async def test_mute_state_persists_across_calls(self) -> None:
+        hub = FakeHub()
+        adapter = _adapter(hub)
+        await adapter.set_mute(_audio(), muted=True)
+        await adapter.set_mute(_audio(), muted=False)
+        await adapter.set_mute(_audio(), muted=True)
+        assert len(hub.send_key_calls) == 3
+
+
+# ---------------------------------------------------------------------------
+# adjust_volume / set_volume (VolumeControllablePort)
+# ---------------------------------------------------------------------------
+
+
+class TestAdjustVolume:
+    async def test_positive_delta_sends_volume_up_keys(self) -> None:
+        hub = FakeHub()
+        await _adapter(hub).adjust_volume(_audio(), 3)
+        assert hub.send_key_calls == ["volume_up", "volume_up", "volume_up"]
+
+    async def test_negative_delta_sends_volume_down_keys(self) -> None:
+        hub = FakeHub()
+        await _adapter(hub).adjust_volume(_audio(), -2)
+        assert hub.send_key_calls == ["volume_down", "volume_down"]
+
+    async def test_zero_delta_sends_no_keys(self) -> None:
+        hub = FakeHub()
+        await _adapter(hub).adjust_volume(_audio(), 0)
+        assert hub.send_key_calls == []
+
+    async def test_returns_new_assumed_volume(self) -> None:
+        hub = FakeHub()
+        adapter = _adapter(hub)
+        result = await adapter.adjust_volume(_audio(), 10)
+        assert result == 60  # default 50 + 10
+
+    async def test_clamps_at_100(self) -> None:
+        hub = FakeHub()
+        adapter = _adapter(hub)
+        result = await adapter.adjust_volume(_audio(), 100)
+        assert result == 100
+
+    async def test_clamps_at_0(self) -> None:
+        hub = FakeHub()
+        adapter = _adapter(hub)
+        result = await adapter.adjust_volume(_audio(), -100)
+        assert result == 0
+
+    async def test_assumed_volume_persists(self) -> None:
+        hub = FakeHub()
+        adapter = _adapter(hub)
+        await adapter.adjust_volume(_audio(), 10)  # assumed = 60
+        result = await adapter.adjust_volume(_audio(), 5)  # assumed = 65
+        assert result == 65
+
+    async def test_hub_error_raises_unavailable(self) -> None:
+        hub = FakeHub(raise_on_operation=HubUnavailableError("disconnected"))
+        with pytest.raises(DeviceUnavailableError):
+            await _adapter(hub).adjust_volume(_audio(), 1)
+
+    async def test_ambiguous_routing_raises_unavailable(self) -> None:
+        from harmonyhub.exceptions import AmbiguousRoutingError
+
+        hub = FakeHub(
+            raise_on_operation=AmbiguousRoutingError(
+                key="volume_up", candidates=["TV", "AVR"]
+            )
+        )
+        with pytest.raises(DeviceUnavailableError):
+            await _adapter(hub).adjust_volume(_audio(), 1)
+
+    async def test_command_not_found_raises_unavailable(self) -> None:
+        from harmonyhub.exceptions import CommandNotFoundError
+
+        hub = FakeHub(
+            raise_on_operation=CommandNotFoundError("volume_up", "Sonos Beam")
+        )
+        with pytest.raises(DeviceUnavailableError):
+            await _adapter(hub).adjust_volume(_audio(), 1)
+
+
+class TestSetVolume:
+    async def test_set_volume_above_assumed_sends_up_keys(self) -> None:
+        hub = FakeHub()
+        adapter = _adapter(hub)  # assumed = 50
+        await adapter.set_volume(_audio(), 53)
+        assert hub.send_key_calls == ["volume_up", "volume_up", "volume_up"]
+
+    async def test_set_volume_below_assumed_sends_down_keys(self) -> None:
+        hub = FakeHub()
+        adapter = _adapter(hub)  # assumed = 50
+        await adapter.set_volume(_audio(), 48)
+        assert hub.send_key_calls == ["volume_down", "volume_down"]
+
+    async def test_set_volume_same_as_assumed_sends_no_keys(self) -> None:
+        hub = FakeHub()
+        adapter = _adapter(hub)  # assumed = 50
+        await adapter.set_volume(_audio(), 50)
+        assert hub.send_key_calls == []
+
+    async def test_assumed_volume_updated_after_set(self) -> None:
+        hub = FakeHub()
+        adapter = _adapter(hub)
+        await adapter.set_volume(_audio(), 70)
+        result = await adapter.adjust_volume(_audio(), 0)
+        assert result == 70
+
+
+# ---------------------------------------------------------------------------
+# concurrency — assumed state must be lock-protected
+# ---------------------------------------------------------------------------
+
+
+class SlowFakeHub(FakeHub):
+    """send_key yields control so concurrent directives interleave."""
+
+    async def send_key(self, key: str) -> CommandResult:
+        import asyncio
+
+        await asyncio.sleep(0.01)
+        return await super().send_key(key)
+
+
+class TestConcurrentState:
+    async def test_concurrent_set_mute_sends_single_toggle(self) -> None:
+        import asyncio
+
+        hub = SlowFakeHub()
+        adapter = _adapter(hub)
+        await asyncio.gather(
+            adapter.set_mute(_audio(), True),
+            adapter.set_mute(_audio(), True),
+        )
+        assert hub.send_key_calls == ["mute"]
+
+    async def test_concurrent_adjust_volume_accumulates(self) -> None:
+        import asyncio
+
+        hub = SlowFakeHub()
+        adapter = _adapter(hub)
+        await asyncio.gather(
+            adapter.adjust_volume(_audio(), 2),
+            adapter.adjust_volume(_audio(), 3),
+        )
+        assert await adapter.get_volume(_audio()) == 55

@@ -39,7 +39,7 @@ thermostats:
 """,
         encoding="utf-8",
     )
-    return Settings(devices_config_path=config)
+    return Settings(devices_config_path=config, dev_mode=True)
 
 
 @pytest.fixture

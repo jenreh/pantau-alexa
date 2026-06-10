@@ -1373,8 +1373,11 @@ dependencies = [
     { name = "passlib", extra = ["bcrypt"] },
     { name = "pydantic" },
     { name = "pydantic-settings" },
+    { name = "python-dotenv" },
     { name = "python-jose", extra = ["cryptography"] },
     { name = "pyyaml" },
+    { name = "rich" },
+    { name = "shellingham" },
     { name = "typer" },
     { name = "uvicorn", extra = ["standard"] },
 ]
@@ -1407,8 +1410,11 @@ requires-dist = [
     { name = "passlib", extras = ["bcrypt"], specifier = "==1.7.4" },
     { name = "pydantic", specifier = "==2.13.4" },
     { name = "pydantic-settings", specifier = "==2.14.1" },
+    { name = "python-dotenv", specifier = ">=1.2.2" },
     { name = "python-jose", extras = ["cryptography"], specifier = "==3.5.0" },
     { name = "pyyaml", specifier = "==6.0.3" },
+    { name = "rich", specifier = "==15.0.0" },
+    { name = "shellingham", specifier = "==1.5.4" },
     { name = "typer", specifier = ">=0.25.1" },
     { name = "uvicorn", extras = ["standard"], specifier = "==0.49.0" },
 ]

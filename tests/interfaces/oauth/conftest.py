@@ -5,11 +5,13 @@ from __future__ import annotations
 import base64
 import hashlib
 import secrets
+from collections.abc import AsyncGenerator
 from pathlib import Path
 
 import bcrypt as _bcrypt
 import pytest
 from fastapi.testclient import TestClient
+from pydantic import SecretStr
 
 from pantau.adapters.auth_code_store import AuthCodeStore
 from pantau.adapters.jwt_service import JwtService
@@ -50,7 +52,7 @@ thermostats:
 @pytest.fixture
 def settings() -> Settings:
     return Settings(
-        jwt_secret="oauth-test-secret",
+        jwt_secret=SecretStr("oauth-test-secret"),
         jwt_access_token_expire_minutes=60,
         dev_mode=True,
         oauth_allowed_redirect_uris=[TEST_REDIRECT_URI],
@@ -58,7 +60,7 @@ def settings() -> Settings:
 
 
 @pytest.fixture
-async def user_store(tmp_path: Path) -> SqliteUserStore:
+async def user_store(tmp_path: Path) -> AsyncGenerator[SqliteUserStore]:
     store = SqliteUserStore(tmp_path / "oauth_test.db")
     await store.start()
     yield store
@@ -67,7 +69,10 @@ async def user_store(tmp_path: Path) -> SqliteUserStore:
 
 @pytest.fixture
 def jwt_service(settings: Settings) -> JwtService:
-    return JwtService(settings)
+    return JwtService(
+        settings.jwt_secret.get_secret_value(),
+        access_token_expire_minutes=settings.jwt_access_token_expire_minutes,
+    )
 
 
 @pytest.fixture

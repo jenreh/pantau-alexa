@@ -32,16 +32,12 @@ class TestPercentage:
         assert p.value == 50
 
     def test_zero_is_valid(self) -> None:
-        p = Percentage.closed()
+        p = Percentage(value=0)
         assert p.value == 0
 
     def test_hundred_is_valid(self) -> None:
-        p = Percentage.open()
+        p = Percentage(value=100)
         assert p.value == 100
-
-    def test_half(self) -> None:
-        p = Percentage.half()
-        assert p.value == 50
 
     def test_below_zero_raises(self) -> None:
         with pytest.raises(ValueError):

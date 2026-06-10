@@ -1,4 +1,4 @@
-"""Tests for TV commands: ActivateChannelCommand and SetTvMuteCommand."""
+"""Tests for TV commands: TurnOnCommand and SetMuteCommand."""
 
 from __future__ import annotations
 
@@ -6,13 +6,21 @@ import pytest
 
 from pantau.adapters.mock_tv_adapter import MockTvAdapter
 from pantau.adapters.yaml_device_registry import YamlDeviceRegistry
-from pantau.commands.tv.activate_channel import ActivateChannelCommand
-from pantau.commands.tv.set_tv_mute import SetTvMuteCommand
+from pantau.commands.set_mute import SetMuteCommand
+from pantau.commands.turn_off import TurnOffCommand
+from pantau.commands.turn_on import TurnOnCommand
+from pantau.composition import Container
 from pantau.domain.errors import DeviceNotFoundError
-from pantau.domain.values import MuteState
+from pantau.domain.models import TvChannel
 
 
-class TestActivateChannel:
+def _container(adapter: MockTvAdapter, registry: YamlDeviceRegistry) -> Container:
+    c = Container()
+    c.register(type(adapter), adapter, adapter_name="harmony")
+    return c
+
+
+class TestTurnOnCommand:
     @pytest.fixture
     def adapter(self) -> MockTvAdapter:
         return MockTvAdapter()
@@ -20,39 +28,39 @@ class TestActivateChannel:
     @pytest.fixture
     def command(
         self, registry: YamlDeviceRegistry, adapter: MockTvAdapter
-    ) -> ActivateChannelCommand:
-        return ActivateChannelCommand(registry, adapter)
+    ) -> TurnOnCommand:
+        return TurnOnCommand(registry, _container(adapter, registry))  # type: ignore[arg-type]
 
-    async def test_ensures_activity_and_sets_channel(
-        self, command: ActivateChannelCommand, adapter: MockTvAdapter
+    async def test_turn_on_channel_calls_adapter(
+        self, command: TurnOnCommand, adapter: MockTvAdapter
     ) -> None:
         await command.execute("zdf")
-        assert adapter.ensure_activity_calls == ["Fernseher"]
-        assert adapter.set_channel_calls == ["2"]
+        assert len(adapter.turn_on_calls) == 1
+        device = adapter.turn_on_calls[0]
+        assert isinstance(device, TvChannel)
+        assert device.id == "zdf"
+        assert device.channel_number == "2"
+        assert device.watch_activity == "Fernseher"
 
-    async def test_activates_ard_channel(
-        self, command: ActivateChannelCommand, adapter: MockTvAdapter
+    async def test_turn_on_ard(
+        self, command: TurnOnCommand, adapter: MockTvAdapter
     ) -> None:
         await command.execute("ard")
-        assert adapter.ensure_activity_calls == ["Fernseher"]
-        assert adapter.set_channel_calls == ["1"]
+        assert adapter.turn_on_calls[0].id == "ard"
 
-    async def test_always_calls_ensure_activity(
-        self, command: ActivateChannelCommand, adapter: MockTvAdapter
+    async def test_multiple_calls_recorded(
+        self, command: TurnOnCommand, adapter: MockTvAdapter
     ) -> None:
         await command.execute("zdf")
         await command.execute("ard")
-        assert adapter.ensure_activity_calls == ["Fernseher", "Fernseher"]
-        assert adapter.set_channel_calls == ["2", "1"]
+        assert len(adapter.turn_on_calls) == 2
 
-    async def test_unknown_endpoint_raises(
-        self, command: ActivateChannelCommand
-    ) -> None:
+    async def test_unknown_endpoint_raises(self, command: TurnOnCommand) -> None:
         with pytest.raises(DeviceNotFoundError):
             await command.execute("sky-sport")
 
 
-class TestSetTvMute:
+class TestTurnOffCommand:
     @pytest.fixture
     def adapter(self) -> MockTvAdapter:
         return MockTvAdapter()
@@ -60,40 +68,55 @@ class TestSetTvMute:
     @pytest.fixture
     def command(
         self, registry: YamlDeviceRegistry, adapter: MockTvAdapter
-    ) -> SetTvMuteCommand:
-        return SetTvMuteCommand(registry, adapter)
+    ) -> TurnOffCommand:
+        return TurnOffCommand(registry, _container(adapter, registry))  # type: ignore[arg-type]
 
-    async def test_mute_from_unmuted_sends_toggle(
-        self, command: SetTvMuteCommand, adapter: MockTvAdapter
+    async def test_turn_off_channel_calls_adapter(
+        self, command: TurnOffCommand, adapter: MockTvAdapter
+    ) -> None:
+        await command.execute("zdf")
+        assert len(adapter.turn_off_calls) == 1
+        assert adapter.turn_off_calls[0].id == "zdf"
+
+    async def test_unknown_endpoint_raises(self, command: TurnOffCommand) -> None:
+        with pytest.raises(DeviceNotFoundError):
+            await command.execute("unknown")
+
+
+class TestSetMuteCommand:
+    @pytest.fixture
+    def adapter(self) -> MockTvAdapter:
+        return MockTvAdapter()
+
+    @pytest.fixture
+    def command(
+        self, registry: YamlDeviceRegistry, adapter: MockTvAdapter
+    ) -> SetMuteCommand:
+        return SetMuteCommand(registry, _container(adapter, registry))  # type: ignore[arg-type]
+
+    async def test_set_mute_true_calls_adapter(
+        self, command: SetMuteCommand, adapter: MockTvAdapter
     ) -> None:
         await command.execute("tv-audio", mute=True)
-        assert adapter.toggle_mute_count == 1
-        assert command.assumed_state == MuteState.MUTED
+        assert len(adapter.set_mute_calls) == 1
+        device, muted = adapter.set_mute_calls[0]
+        assert device.id == "tv-audio"
+        assert muted is True
 
-    async def test_unmute_from_muted_sends_toggle(
-        self, command: SetTvMuteCommand, adapter: MockTvAdapter
+    async def test_set_mute_false_calls_adapter(
+        self, command: SetMuteCommand, adapter: MockTvAdapter
+    ) -> None:
+        await command.execute("tv-audio", mute=False)
+        _, muted = adapter.set_mute_calls[0]
+        assert muted is False
+
+    async def test_multiple_mute_calls_recorded(
+        self, command: SetMuteCommand, adapter: MockTvAdapter
     ) -> None:
         await command.execute("tv-audio", mute=True)
         await command.execute("tv-audio", mute=False)
-        assert adapter.toggle_mute_count == 2
-        assert command.assumed_state == MuteState.UNMUTED
+        assert len(adapter.set_mute_calls) == 2
 
-    async def test_mute_when_already_muted_skips_toggle(
-        self, command: SetTvMuteCommand, adapter: MockTvAdapter
-    ) -> None:
-        await command.execute("tv-audio", mute=True)
-        await command.execute("tv-audio", mute=True)
-        assert adapter.toggle_mute_count == 1
-
-    async def test_unmute_when_already_unmuted_skips_toggle(
-        self, command: SetTvMuteCommand, adapter: MockTvAdapter
-    ) -> None:
-        await command.execute("tv-audio", mute=False)
-        assert adapter.toggle_mute_count == 0
-
-    async def test_initial_state_is_unmuted(self, command: SetTvMuteCommand) -> None:
-        assert command.assumed_state == MuteState.UNMUTED
-
-    async def test_unknown_endpoint_raises(self, command: SetTvMuteCommand) -> None:
+    async def test_unknown_endpoint_raises(self, command: SetMuteCommand) -> None:
         with pytest.raises(DeviceNotFoundError):
             await command.execute("bad-endpoint", mute=True)

@@ -43,15 +43,3 @@ class Percentage(BaseModel):
             msg = f"Percentage {self.value} is outside the valid range 0–100"
             raise ValueError(msg)
         return self
-
-    @classmethod
-    def half(cls) -> Percentage:
-        return cls(value=50)
-
-    @classmethod
-    def closed(cls) -> Percentage:
-        return cls(value=0)
-
-    @classmethod
-    def open(cls) -> Percentage:
-        return cls(value=100)

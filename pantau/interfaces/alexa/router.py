@@ -37,7 +37,13 @@ class AlexaDirectiveRouter:
             ("Alexa.PowerController", "TurnOn"): power.handle,
             ("Alexa.PowerController", "TurnOff"): power.handle,
             ("Alexa.Speaker", "SetMute"): speaker.handle,
+            ("Alexa.Speaker", "SetVolume"): speaker.handle,
+            ("Alexa.Speaker", "AdjustVolume"): speaker.handle,
             ("Alexa.ThermostatController", "SetTargetTemperature"): thermostat.handle,
+            (
+                "Alexa.ThermostatController",
+                "AdjustTargetTemperature",
+            ): thermostat.handle,
             ("Alexa.RangeController", "SetRangeValue"): range_.handle,
             ("Alexa.RangeController", "AdjustRangeValue"): range_.handle,
             ("Alexa.Discovery", "Discover"): discovery.handle,

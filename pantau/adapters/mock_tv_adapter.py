@@ -4,43 +4,80 @@ from __future__ import annotations
 
 import logging
 
-from pantau.domain.models import Activity, HubDevice
+from pantau.domain.models import ADAPTER_HARMONY, Activity, Device, HubDevice
+from pantau.ports.listable_port import BackendListResult
 
 log = logging.getLogger(__name__)
 
 
 class MockTvAdapter:
-    """Stub implementation of TvPort for development and testing."""
+    """Stub implementation of PowerablePort and MuteControllablePort for testing."""
+
+    adapter_name = ADAPTER_HARMONY
 
     def __init__(self) -> None:
-        self._current_activity: str | None = None
-        self.ensure_activity_calls: list[str] = []
-        self.set_channel_calls: list[str] = []
+        self.turn_on_calls: list[Device] = []
+        self.turn_off_calls: list[Device] = []
+        self.set_mute_calls: list[tuple[Device, bool]] = []
+        self.set_volume_calls: list[tuple[Device, int]] = []
+        self.adjust_volume_calls: list[tuple[Device, int]] = []
         self.toggle_mute_count: int = 0
+        self._assumed_mute: bool = False
+        self._assumed_volume: int = 50
         self._activities: list[Activity] = []
         self._devices: list[HubDevice] = []
 
-    async def ensure_activity(self, activity_name: str) -> None:
-        log.info("MockTV: ensure_activity=%s", activity_name)
-        self._current_activity = activity_name
-        self.ensure_activity_calls.append(activity_name)
+    async def turn_on(self, device: Device) -> None:
+        log.info("MockTV: turn_on device=%s", device.id)
+        self.turn_on_calls.append(device)
 
-    async def set_channel(self, channel_number: str) -> None:
-        log.info("MockTV: set_channel=%s", channel_number)
-        self.set_channel_calls.append(channel_number)
+    async def turn_off(self, device: Device) -> None:
+        log.info("MockTV: turn_off device=%s", device.id)
+        self.turn_off_calls.append(device)
+
+    async def set_mute(self, device: Device, muted: bool) -> None:
+        log.info("MockTV: set_mute device=%s muted=%s", device.id, muted)
+        self._assumed_mute = muted
+        self.set_mute_calls.append((device, muted))
+
+    async def get_mute(self, device: Device) -> bool:
+        log.debug("MockTV: get_mute device=%s -> %s", device.id, self._assumed_mute)
+        return self._assumed_mute
+
+    async def set_volume(self, device: Device, level: int) -> None:
+        log.info("MockTV: set_volume device=%s level=%d", device.id, level)
+        self._assumed_volume = max(0, min(100, level))
+        self.set_volume_calls.append((device, level))
+
+    async def adjust_volume(self, device: Device, delta: int) -> int:
+        self._assumed_volume = max(0, min(100, self._assumed_volume + delta))
+        self.adjust_volume_calls.append((device, delta))
+        log.info(
+            "MockTV: adjust_volume device=%s delta=%d -> %d",
+            device.id,
+            delta,
+            self._assumed_volume,
+        )
+        return self._assumed_volume
+
+    async def get_volume(self, device: Device) -> int:
+        log.debug("MockTV: get_volume device=%s -> %d", device.id, self._assumed_volume)
+        return self._assumed_volume
 
     async def toggle_mute(self) -> None:
         log.info("MockTV: toggle_mute")
         self.toggle_mute_count += 1
 
-    async def get_current_activity(self) -> str | None:
-        log.info("MockTV: get_current_activity -> %s", self._current_activity)
-        return self._current_activity
-
-    async def list_activities(self) -> list[Activity]:
-        log.info("MockTV: list_activities count=%d", len(self._activities))
-        return list(self._activities)
-
-    async def list_devices(self) -> list[HubDevice]:
-        log.info("MockTV: list_devices count=%d", len(self._devices))
-        return list(self._devices)
+    async def list_backend(self) -> BackendListResult:
+        log.info(
+            "MockTV: list_backend activities=%d devices=%d",
+            len(self._activities),
+            len(self._devices),
+        )
+        return BackendListResult(
+            status="ok",
+            data={
+                "activities": [a.model_dump() for a in self._activities],
+                "devices": [d.model_dump() for d in self._devices],
+            },
+        )

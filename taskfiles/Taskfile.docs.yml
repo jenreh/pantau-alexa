@@ -7,18 +7,18 @@ vars:
 
 tasks:
   dev:
-    desc: Start the Astro dev server with live reload
+    desc: Start the VitePress dev server with live reload
     dir: "{{.DOCS_DIR}}"
     cmds:
       - npm run docs:dev
 
   build:
-    desc: Build the Starlight documentation site
+    desc: Build the VitePress documentation site
     dir: "{{.DOCS_DIR}}"
     cmds:
       - npm run docs:build
     generates:
-      - "{{.DOCS_DIR}}/dist/index.html"
+      - "{{.DOCS_DIR}}/.vitepress/dist/index.html"
 
   preview:
     desc: Preview the production build locally

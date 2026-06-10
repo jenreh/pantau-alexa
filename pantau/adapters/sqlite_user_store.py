@@ -6,6 +6,7 @@ through the FastAPI lifespan.
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import uuid
 from datetime import UTC, datetime
@@ -16,6 +17,12 @@ import aiosqlite
 from pantau.ports.user_store_port import UserRecord
 
 log = logging.getLogger(__name__)
+
+
+def _hash_token(token: str) -> str:
+    """Refresh tokens are stored hashed so a DB leak does not expose them."""
+    return hashlib.sha256(token.encode()).hexdigest()
+
 
 _CREATE_USERS = """
 CREATE TABLE IF NOT EXISTS users (
@@ -93,30 +100,15 @@ class SqliteUserStore:
         conn = self._require_conn()
         await conn.execute(
             "INSERT OR REPLACE INTO refresh_tokens (token, user_id, expires_at) VALUES (?, ?, ?)",
-            (token, user_id, expires_at.isoformat()),
+            (_hash_token(token), user_id, expires_at.isoformat()),
         )
         await conn.commit()
 
-    async def get_refresh_token_user_id(self, token: str) -> str | None:
-        conn = self._require_conn()
-        async with conn.execute(
-            "SELECT user_id, expires_at FROM refresh_tokens WHERE token = ?",
-            (token,),
-        ) as cursor:
-            row = await cursor.fetchone()
-        if row is None:
-            return None
-        expires_at = datetime.fromisoformat(row["expires_at"])
-        if expires_at.tzinfo is None:
-            expires_at = expires_at.replace(tzinfo=UTC)
-        if datetime.now(UTC) > expires_at:
-            await self.revoke_refresh_token(token)
-            return None
-        return str(row["user_id"])
-
     async def revoke_refresh_token(self, token: str) -> None:
         conn = self._require_conn()
-        await conn.execute("DELETE FROM refresh_tokens WHERE token = ?", (token,))
+        await conn.execute(
+            "DELETE FROM refresh_tokens WHERE token = ?", (_hash_token(token),)
+        )
         await conn.commit()
 
     async def pop_refresh_token(self, token: str) -> str | None:
@@ -129,7 +121,7 @@ class SqliteUserStore:
         now_iso = datetime.now(UTC).isoformat()
         async with conn.execute(
             "DELETE FROM refresh_tokens WHERE token = ? AND expires_at > ? RETURNING user_id",
-            (token, now_iso),
+            (_hash_token(token), now_iso),
         ) as cursor:
             row = await cursor.fetchone()
         await conn.commit()

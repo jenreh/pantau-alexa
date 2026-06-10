@@ -2,14 +2,15 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncGenerator
 from pathlib import Path
 
 import pytest
 from typer.testing import CliRunner
 
+from pantau.adapters.password_hasher import hash_password
 from pantau.adapters.sqlite_user_store import SqliteUserStore
 from pantau.cli.users import app
-from pantau.interfaces.oauth.router import hash_password
 
 runner = CliRunner()
 
@@ -20,7 +21,7 @@ def db_path(tmp_path: Path) -> Path:
 
 
 @pytest.fixture
-async def populated_store(db_path: Path) -> SqliteUserStore:
+async def populated_store(db_path: Path) -> AsyncGenerator[SqliteUserStore]:
     store = SqliteUserStore(db_path)
     await store.start()
     await store.create_user("alice", hash_password("password1"))
@@ -192,7 +193,7 @@ class TestAdminStoreOperations:
         await store.save_refresh_token("tok-1", user.id, expires)
 
         await store.delete_user("dave")
-        user_id = await store.get_refresh_token_user_id("tok-1")
+        user_id = await store.pop_refresh_token("tok-1")
         await store.stop()
         assert user_id is None
 

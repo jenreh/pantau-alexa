@@ -6,17 +6,59 @@ import logging
 from contextlib import asynccontextmanager
 
 import uvicorn
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.responses import JSONResponse
 
 from pantau.commands.list_connected_devices import ListConnectedDevicesCommand
 from pantau.composition import Container, build_container
 from pantau.config.settings import Settings, get_settings
 from pantau.interfaces.alexa.directive_router import alexa_router
+from pantau.interfaces.http_auth import require_bearer_token
 from pantau.interfaces.oauth.router import oauth_router
+from pantau.interfaces.rate_limit import SlidingWindowRateLimiter
 from pantau.ports.device_registry_port import DeviceRegistryPort
 
 log = logging.getLogger(__name__)
+
+
+_MIN_JWT_SECRET_LENGTH = 32
+
+
+def _validate_security_settings(settings: Settings) -> None:
+    """Fail fast on insecure secrets unless running in dev mode.
+
+    An empty jwt_secret would let anyone forge HS256 tokens offline and
+    drive every device through /alexa/directive.
+    """
+    if settings.dev_mode:
+        log.warning(
+            "DEV_MODE is enabled — redirect_uri and secret checks are "
+            "relaxed. Do NOT use in production."
+        )
+        if not settings.jwt_secret.get_secret_value():
+            log.warning(
+                "DEV_MODE is on and jwt_secret is empty — "
+                "tokens are forgeable. Do NOT use in production."
+            )
+        return
+
+    secret = settings.jwt_secret.get_secret_value()
+    if not secret:
+        raise RuntimeError(
+            "PANTAU_JWT_SECRET is not set. Refusing to start: an empty JWT "
+            "secret makes every access token forgeable. Set PANTAU_JWT_SECRET "
+            "or PANTAU_DEV_MODE=true for local development."
+        )
+    if len(secret) < _MIN_JWT_SECRET_LENGTH:
+        raise RuntimeError(
+            "PANTAU_JWT_SECRET is too short for HS256: "
+            f"need at least {_MIN_JWT_SECRET_LENGTH} characters."
+        )
+    if not settings.shared_secret.get_secret_value():
+        log.warning(
+            "PANTAU_SHARED_SECRET is not set — HMAC request signing on "
+            "/alexa/directive is disabled (bearer-token auth only)."
+        )
 
 
 def create_app(
@@ -28,17 +70,27 @@ def create_app(
         # Only load from environment when building the container ourselves
         settings = get_settings() if container is None else Settings()
 
+    _validate_security_settings(settings)
+
     if container is None:
         container = build_container(settings)
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):  # type: ignore[return]
-        adapters = container.lifecycle_adapters
-        for adapter in adapters:
-            await adapter.start()
-        yield
-        for adapter in reversed(adapters):
-            await adapter.stop()
+        started = []
+        try:
+            for adapter in container.lifecycle_adapters:
+                await adapter.start()
+                started.append(adapter)
+            yield
+        finally:
+            # Stop only what actually started — a partial-start failure must
+            # not leave earlier adapters holding connections (zombies).
+            for adapter in reversed(started):
+                try:
+                    await adapter.stop()
+                except Exception:
+                    log.exception("Error stopping adapter %s", type(adapter).__name__)
 
     app = FastAPI(
         title="pantau-alexa",
@@ -49,6 +101,17 @@ def create_app(
 
     app.state.container = container
     app.state.settings = settings
+    app.state.login_rate_limiter = SlidingWindowRateLimiter(
+        settings.rate_limit_max_attempts, settings.rate_limit_window_seconds
+    )
+    # Wider per-IP bucket: blocks spraying many usernames from one address,
+    # which the per-(ip, username) bucket alone would never throttle.
+    app.state.login_ip_rate_limiter = SlidingWindowRateLimiter(
+        settings.rate_limit_max_attempts * 3, settings.rate_limit_window_seconds
+    )
+    app.state.token_rate_limiter = SlidingWindowRateLimiter(
+        settings.rate_limit_max_attempts, settings.rate_limit_window_seconds
+    )
 
     if not settings.oauth_allowed_redirect_uris:
         if settings.dev_mode:
@@ -89,81 +152,40 @@ def _register_routes(app: FastAPI) -> None:
             }
         )
 
-    @app.get("/devices/connected", tags=["system"])
+    @app.get(
+        "/devices/connected",
+        tags=["system"],
+        dependencies=[Depends(require_bearer_token)],
+    )
     async def connected_devices() -> JSONResponse:
-        """Live device scan — queries Harmony Hub, HomeKit, and FRITZ!Box in parallel.
+        """Live device scan — queries all registered backends.
 
-        Each backend reports independently: an offline hub yields
+        Requires a valid bearer token: the response exposes the full home
+        inventory and triggers live scans of every backend.
+
+        Each backend reports independently: an offline adapter yields
         ``status="unavailable"`` for that section while the rest succeed.
+        New adapters (Hue, Sonos, …) appear automatically when registered.
         """
         container: Container = app.state.container
         command = container.get(ListConnectedDevicesCommand)
         result = await command.execute()
-
-        def _harmony() -> dict:
-            r = result.harmony
-            base: dict = {"status": r.status}
-            if r.error:
-                base["error"] = r.error
-            else:
-                base["activities"] = [
-                    {"id": a.id, "name": a.name, "is_power_off": a.is_power_off}
-                    for a in r.activities
-                ]
-                base["devices"] = [
-                    {
-                        "id": d.id,
-                        "name": d.name,
-                        "manufacturer": d.manufacturer,
-                        "model": d.model,
-                    }
-                    for d in r.devices
-                ]
-            return base
-
-        def _homekit() -> dict:
-            r = result.homekit
-            base: dict = {"status": r.status}
-            if r.error:
-                base["error"] = r.error
-            else:
-                base["devices"] = [
-                    {
-                        "id": e.id,
-                        "name": e.name,
-                        "domain": e.domain,
-                        "room": e.room,
-                    }
-                    for e in r.devices
-                ]
-            return base
-
-        def _fritz() -> dict:
-            r = result.fritz
-            base: dict = {"status": r.status}
-            if r.error:
-                base["error"] = r.error
-            else:
-                base["devices"] = [
-                    {
-                        "id": d.id,
-                        "name": d.name,
-                        "online": d.online,
-                        "current_temp": d.current_temp,
-                        "target_temp": d.target_temp,
-                        "battery_level": d.battery_level,
-                        "battery_low": d.battery_low,
-                    }
-                    for d in r.devices
-                ]
-            return base
-
-        return JSONResponse(
-            {"harmony": _harmony(), "homekit": _homekit(), "fritz": _fritz()}
-        )
+        return JSONResponse(result)
 
 
 def main() -> None:
+    from dotenv import load_dotenv  # noqa: PLC0415
+
+    from pantau.config.settings import _PROJECT_ROOT  # noqa: PLC0415
+
+    env_file = _PROJECT_ROOT / ".env"
+    loaded = load_dotenv(env_file)
+    if loaded:
+        log.info("Loaded environment from %s", env_file)
+    else:
+        log.info(
+            "No .env file found at %s — using environment variables only", env_file
+        )
 
     settings = get_settings()
     uvicorn.run(

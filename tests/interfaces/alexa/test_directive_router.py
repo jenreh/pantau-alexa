@@ -164,6 +164,76 @@ class TestSpeaker:
         props = {p["name"]: p for p in body["context"]["properties"]}
         assert props["muted"]["value"] is True
 
+    def test_set_mute_always_reports_both_muted_and_volume(
+        self, client: TestClient
+    ) -> None:
+        body = client.post(
+            "/alexa/directive",
+            json=directive(
+                "Alexa.Speaker",
+                "SetMute",
+                endpoint_id="tv-audio",
+                payload={"mute": True},
+            ),
+        ).json()
+        props = {p["name"]: p for p in body["context"]["properties"]}
+        assert "muted" in props
+        assert "volume" in props
+
+    def test_set_volume_returns_200(self, client: TestClient) -> None:
+        resp = client.post(
+            "/alexa/directive",
+            json=directive(
+                "Alexa.Speaker",
+                "SetVolume",
+                endpoint_id="tv-audio",
+                payload={"volume": 70},
+            ),
+        )
+        assert resp.status_code == 200
+
+    def test_set_volume_reports_both_muted_and_volume(self, client: TestClient) -> None:
+        body = client.post(
+            "/alexa/directive",
+            json=directive(
+                "Alexa.Speaker",
+                "SetVolume",
+                endpoint_id="tv-audio",
+                payload={"volume": 70},
+            ),
+        ).json()
+        props = {p["name"]: p for p in body["context"]["properties"]}
+        assert props["volume"]["value"] == 70
+        assert "muted" in props
+
+    def test_adjust_volume_returns_200(self, client: TestClient) -> None:
+        resp = client.post(
+            "/alexa/directive",
+            json=directive(
+                "Alexa.Speaker",
+                "AdjustVolume",
+                endpoint_id="tv-audio",
+                payload={"volume": 5},
+            ),
+        )
+        assert resp.status_code == 200
+
+    def test_adjust_volume_reports_both_muted_and_volume(
+        self, client: TestClient
+    ) -> None:
+        body = client.post(
+            "/alexa/directive",
+            json=directive(
+                "Alexa.Speaker",
+                "AdjustVolume",
+                endpoint_id="tv-audio",
+                payload={"volume": 5},
+            ),
+        ).json()
+        props = {p["name"]: p for p in body["context"]["properties"]}
+        assert "muted" in props
+        assert "volume" in props
+
 
 class TestThermostatController:
     """Alexa.ThermostatController — SetTargetTemperature."""
@@ -244,6 +314,126 @@ class TestThermostatController:
 
         assert body["event"]["header"]["name"] == "ErrorResponse"
         assert body["event"]["payload"]["type"] == "VALUE_OUT_OF_RANGE"
+
+    def test_non_thermostat_endpoint_returns_invalid_value(
+        self, client: TestClient
+    ) -> None:
+        body = client.post(
+            "/alexa/directive",
+            json=directive(
+                "Alexa.ThermostatController",
+                "SetTargetTemperature",
+                endpoint_id="tv-audio",
+                payload={"targetSetpoint": {"value": 22.0, "scale": "CELSIUS"}},
+            ),
+        ).json()
+
+        assert body["event"]["header"]["name"] == "ErrorResponse"
+        assert body["event"]["payload"]["type"] == "INVALID_VALUE"
+
+
+class TestAdjustTargetTemperature:
+    """Alexa.ThermostatController — AdjustTargetTemperature (relative changes).
+
+    The mock thermostat reports 20.0 °C as the current target.
+    """
+
+    def test_adjust_celsius_delta_applies_relative_change(
+        self, client: TestClient
+    ) -> None:
+        body = client.post(
+            "/alexa/directive",
+            json=directive(
+                "Alexa.ThermostatController",
+                "AdjustTargetTemperature",
+                endpoint_id="wohnzimmer-heizung",
+                payload={"targetSetpointDelta": {"value": 2.0, "scale": "CELSIUS"}},
+            ),
+        ).json()
+
+        assert body["event"]["header"]["name"] == "Response"
+        prop = body["context"]["properties"][0]
+        assert prop["namespace"] == "Alexa.ThermostatController"
+        assert prop["name"] == "targetSetpoint"
+        assert prop["value"] == {"value": 22.0, "scale": "CELSIUS"}
+
+    def test_adjust_fahrenheit_delta_uses_factor_only(self, client: TestClient) -> None:
+        # A delta of 3.6 °F is 2.0 °C — no 32° offset for deltas.
+        body = client.post(
+            "/alexa/directive",
+            json=directive(
+                "Alexa.ThermostatController",
+                "AdjustTargetTemperature",
+                endpoint_id="wohnzimmer-heizung",
+                payload={"targetSetpointDelta": {"value": 3.6, "scale": "FAHRENHEIT"}},
+            ),
+        ).json()
+
+        assert body["event"]["header"]["name"] == "Response"
+        prop = body["context"]["properties"][0]
+        assert prop["value"] == {"value": 22.0, "scale": "CELSIUS"}
+
+    def test_adjust_negative_delta_lowers_target(self, client: TestClient) -> None:
+        body = client.post(
+            "/alexa/directive",
+            json=directive(
+                "Alexa.ThermostatController",
+                "AdjustTargetTemperature",
+                endpoint_id="wohnzimmer-heizung",
+                payload={"targetSetpointDelta": {"value": -1.5, "scale": "CELSIUS"}},
+            ),
+        ).json()
+
+        prop = body["context"]["properties"][0]
+        assert prop["value"] == {"value": 18.5, "scale": "CELSIUS"}
+
+    def test_adjust_beyond_device_max_returns_value_out_of_range(
+        self, client: TestClient
+    ) -> None:
+        body = client.post(
+            "/alexa/directive",
+            json=directive(
+                "Alexa.ThermostatController",
+                "AdjustTargetTemperature",
+                endpoint_id="wohnzimmer-heizung",
+                payload={"targetSetpointDelta": {"value": 10.0, "scale": "CELSIUS"}},
+            ),
+        ).json()
+
+        assert body["event"]["header"]["name"] == "ErrorResponse"
+        assert body["event"]["payload"]["type"] == "VALUE_OUT_OF_RANGE"
+
+    def test_adjust_unknown_endpoint_returns_no_such_endpoint(
+        self, client: TestClient
+    ) -> None:
+        body = client.post(
+            "/alexa/directive",
+            json=directive(
+                "Alexa.ThermostatController",
+                "AdjustTargetTemperature",
+                endpoint_id="bad-thermostat",
+                payload={"targetSetpointDelta": {"value": 1.0, "scale": "CELSIUS"}},
+            ),
+        ).json()
+
+        assert body["event"]["header"]["name"] == "ErrorResponse"
+        assert body["event"]["payload"]["type"] == "NO_SUCH_ENDPOINT"
+
+    def test_adjust_non_thermostat_endpoint_returns_invalid_value(
+        self, client: TestClient
+    ) -> None:
+        body = client.post(
+            "/alexa/directive",
+            json=directive(
+                "Alexa.ThermostatController",
+                "AdjustTargetTemperature",
+                endpoint_id="tv-audio",
+                payload={"targetSetpointDelta": {"value": 1.0, "scale": "CELSIUS"}},
+            ),
+        ).json()
+
+        assert body["event"]["header"]["name"] == "ErrorResponse"
+        assert body["event"]["payload"]["type"] == "INVALID_VALUE"
 
 
 class TestRangeController:
@@ -577,6 +767,155 @@ class TestAdjustRangeValue:
         assert body["event"]["payload"]["type"] == "NO_SUCH_ENDPOINT"
 
 
+class TestCapabilityMismatch:
+    """Capability mismatches must map to INVALID_VALUE, never INTERNAL_ERROR."""
+
+    def test_set_volume_on_blind_returns_invalid_value(
+        self, client: TestClient
+    ) -> None:
+        body = client.post(
+            "/alexa/directive",
+            json=directive(
+                "Alexa.Speaker",
+                "SetVolume",
+                endpoint_id="kueche-rollo",
+                payload={"volume": 30},
+            ),
+        ).json()
+
+        assert body["event"]["header"]["name"] == "ErrorResponse"
+        assert body["event"]["payload"]["type"] == "INVALID_VALUE"
+
+    def test_set_range_on_thermostat_returns_invalid_value(
+        self, client: TestClient
+    ) -> None:
+        body = client.post(
+            "/alexa/directive",
+            json=directive(
+                "Alexa.RangeController",
+                "SetRangeValue",
+                endpoint_id="wohnzimmer-heizung",
+                payload={"rangeValue": 50},
+            ),
+        ).json()
+
+        assert body["event"]["header"]["name"] == "ErrorResponse"
+        assert body["event"]["payload"]["type"] == "INVALID_VALUE"
+
+
+class TestPayloadValidation:
+    """Missing or mistyped payload fields must be rejected, not defaulted."""
+
+    def test_set_volume_without_volume_returns_invalid_value(
+        self, client: TestClient
+    ) -> None:
+        body = client.post(
+            "/alexa/directive",
+            json=directive(
+                "Alexa.Speaker", "SetVolume", endpoint_id="tv-audio", payload={}
+            ),
+        ).json()
+
+        assert body["event"]["header"]["name"] == "ErrorResponse"
+        assert body["event"]["payload"]["type"] == "INVALID_VALUE"
+
+    def test_set_range_without_range_value_returns_invalid_value(
+        self, client: TestClient
+    ) -> None:
+        body = client.post(
+            "/alexa/directive",
+            json=directive(
+                "Alexa.RangeController",
+                "SetRangeValue",
+                endpoint_id="kueche-rollo",
+                payload={},
+            ),
+        ).json()
+
+        assert body["event"]["header"]["name"] == "ErrorResponse"
+        assert body["event"]["payload"]["type"] == "INVALID_VALUE"
+
+    def test_set_mute_without_mute_returns_invalid_value(
+        self, client: TestClient
+    ) -> None:
+        body = client.post(
+            "/alexa/directive",
+            json=directive(
+                "Alexa.Speaker", "SetMute", endpoint_id="tv-audio", payload={}
+            ),
+        ).json()
+
+        assert body["event"]["header"]["name"] == "ErrorResponse"
+        assert body["event"]["payload"]["type"] == "INVALID_VALUE"
+
+    def test_set_mute_with_string_value_returns_invalid_value(
+        self, client: TestClient
+    ) -> None:
+        """bool("false") is True — string payloads must be rejected, not coerced."""
+        body = client.post(
+            "/alexa/directive",
+            json=directive(
+                "Alexa.Speaker",
+                "SetMute",
+                endpoint_id="tv-audio",
+                payload={"mute": "false"},
+            ),
+        ).json()
+
+        assert body["event"]["header"]["name"] == "ErrorResponse"
+        assert body["event"]["payload"]["type"] == "INVALID_VALUE"
+
+    def test_set_temperature_without_target_setpoint_returns_invalid_value(
+        self, client: TestClient
+    ) -> None:
+        body = client.post(
+            "/alexa/directive",
+            json=directive(
+                "Alexa.ThermostatController",
+                "SetTargetTemperature",
+                endpoint_id="wohnzimmer-heizung",
+                payload={},
+            ),
+        ).json()
+
+        assert body["event"]["header"]["name"] == "ErrorResponse"
+        assert body["event"]["payload"]["type"] == "INVALID_VALUE"
+
+    def test_adjust_temperature_without_delta_returns_invalid_value(
+        self, client: TestClient
+    ) -> None:
+        """A missing delta must not silently succeed as a zero-degree change."""
+        body = client.post(
+            "/alexa/directive",
+            json=directive(
+                "Alexa.ThermostatController",
+                "AdjustTargetTemperature",
+                endpoint_id="wohnzimmer-heizung",
+                payload={},
+            ),
+        ).json()
+
+        assert body["event"]["header"]["name"] == "ErrorResponse"
+        assert body["event"]["payload"]["type"] == "INVALID_VALUE"
+
+    def test_thermostat_reports_rounded_applied_setpoint(
+        self, client: TestClient
+    ) -> None:
+        """The response must report the 0.5-rounded value actually applied."""
+        body = client.post(
+            "/alexa/directive",
+            json=directive(
+                "Alexa.ThermostatController",
+                "SetTargetTemperature",
+                endpoint_id="wohnzimmer-heizung",
+                payload={"targetSetpoint": {"value": 21.3, "scale": "CELSIUS"}},
+            ),
+        ).json()
+
+        prop = body["context"]["properties"][0]
+        assert prop["value"] == {"value": 21.5, "scale": "CELSIUS"}
+
+
 class TestHandlerValidation:
     """Payload validation and error-type correctness across handlers."""
 
@@ -596,7 +935,7 @@ class TestHandlerValidation:
         assert body["event"]["header"]["name"] == "ErrorResponse"
         assert body["event"]["payload"]["type"] == "VALUE_OUT_OF_RANGE"
 
-    def test_thermostat_kelvin_scale_returns_value_out_of_range(
+    def test_thermostat_kelvin_scale_is_converted_to_celsius(
         self, client: TestClient
     ) -> None:
         body = client.post(
@@ -606,6 +945,23 @@ class TestHandlerValidation:
                 "SetTargetTemperature",
                 endpoint_id="wohnzimmer-heizung",
                 payload={"targetSetpoint": {"value": 293.15, "scale": "KELVIN"}},
+            ),
+        ).json()
+
+        assert body["event"]["header"]["name"] == "Response"
+        prop = body["context"]["properties"][0]
+        assert prop["value"] == {"value": 20.0, "scale": "CELSIUS"}
+
+    def test_thermostat_unknown_scale_returns_value_out_of_range(
+        self, client: TestClient
+    ) -> None:
+        body = client.post(
+            "/alexa/directive",
+            json=directive(
+                "Alexa.ThermostatController",
+                "SetTargetTemperature",
+                endpoint_id="wohnzimmer-heizung",
+                payload={"targetSetpoint": {"value": 22.0, "scale": "RANKINE"}},
             ),
         ).json()
 

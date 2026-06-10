@@ -17,7 +17,7 @@ You also need at least one physical device (Harmony Hub, FRITZ!Box, or HomeKit a
 
 ```bash
 # Clone the repository
-git clone https://github.com/example/pantau-alexa
+git clone https://github.com/jenreh/pantau-alexa
 cd pantau-alexa
 
 # Install Python dependencies (uv creates the venv automatically)
@@ -61,9 +61,11 @@ DEVICES_CONFIG_PATH=config/devices.yaml
 
 ::: warning Production secrets
 Generate real secrets before exposing the server to the internet:
+
 ```bash
 python -c "import secrets; print(secrets.token_hex(32))"
 ```
+
 :::
 
 ## Create the first user

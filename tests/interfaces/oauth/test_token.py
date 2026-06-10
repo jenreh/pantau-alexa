@@ -85,6 +85,25 @@ class TestCodeExchange:
         assert claims.user_id == registered_user["user_id"]
         assert claims.scope == "alexa"
 
+    async def test_missing_client_id_returns_invalid_request(
+        self, client: TestClient, registered_user: dict
+    ) -> None:
+        """client_id is mandatory — omitting it must not bypass the binding check."""
+        verifier, challenge = make_pkce_pair()
+        code = _get_auth_code(client, verifier, challenge)
+
+        resp = client.post(
+            "/oauth/token",
+            data={
+                "grant_type": "authorization_code",
+                "code": code,
+                "code_verifier": verifier,
+                "redirect_uri": TEST_REDIRECT_URI,
+            },
+        )
+        assert resp.status_code == 400
+        assert resp.json()["error"] == "invalid_request"
+
     async def test_wrong_code_verifier_returns_invalid_grant(
         self, client: TestClient, registered_user: dict
     ) -> None:

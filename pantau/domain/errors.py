@@ -19,3 +19,17 @@ class DeviceUnavailableError(Exception):
 
     def __init__(self, message: str) -> None:
         super().__init__(message)
+
+
+class DeviceCapabilityError(Exception):
+    """Raised when a found device does not have the requested capability.
+
+    Maps to Alexa INVALID_VALUE in the directive handler.
+    """
+
+    def __init__(self, endpoint_id: str, capability: str) -> None:
+        super().__init__(
+            f"Device {endpoint_id!r} does not support capability {capability!r}"
+        )
+        self.endpoint_id = endpoint_id
+        self.capability = capability

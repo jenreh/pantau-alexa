@@ -17,26 +17,18 @@ from base64 import urlsafe_b64encode
 from datetime import UTC, datetime, timedelta
 from urllib.parse import urlencode
 
-import bcrypt as _bcrypt
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
-from pantau.adapters.auth_code_store import AuthCodeStore
-from pantau.adapters.jwt_service import JwtService
+from pantau.config.settings import Settings
+from pantau.ports.auth_code_store_port import AuthCodeStorePort
+from pantau.ports.password_hasher_port import PasswordHasherPort
+from pantau.ports.token_issuer_port import TokenIssuerPort
 from pantau.ports.user_store_port import UserStorePort
 
 log = logging.getLogger(__name__)
 
 oauth_router = APIRouter(prefix="/oauth", tags=["oauth"])
-
-
-def _verify_password(plain: str, hashed: str) -> bool:
-    return _bcrypt.checkpw(plain.encode(), hashed.encode())
-
-
-def hash_password(plain: str) -> str:
-    """Hash a plain-text password for storage."""
-    return _bcrypt.hashpw(plain.encode(), _bcrypt.gensalt()).decode()
 
 
 _LOGIN_FORM_HTML = """\
@@ -102,12 +94,11 @@ def _check_redirect_uri(
 
 
 def _verify_pkce(code_verifier: str, code_challenge: str, method: str) -> bool:
+    # Only S256 is accepted; 'plain' would downgrade PKCE to a bearer secret.
     if method == "S256":
         digest = hashlib.sha256(code_verifier.encode()).digest()
         computed = urlsafe_b64encode(digest).rstrip(b"=").decode()
         return secrets.compare_digest(computed, code_challenge)
-    if method == "plain":
-        return secrets.compare_digest(code_verifier, code_challenge)
     return False
 
 
@@ -146,15 +137,21 @@ async def authorize_get(
     code_challenge_method: str = "S256",
     state: str = "",
 ) -> HTMLResponse:
-    settings = request.app.state.settings
-    allowed: list[str] = getattr(settings, "oauth_allowed_redirect_uris", [])
-    dev_mode: bool = getattr(settings, "dev_mode", False)
+    settings: Settings = request.app.state.settings
+    allowed = settings.oauth_allowed_redirect_uris
+    dev_mode = settings.dev_mode
     if not _check_redirect_uri(redirect_uri, allowed, dev_mode=dev_mode):
         return _redirect_uri_error(allowed, dev_mode)
 
     if response_type != "code":
         return HTMLResponse(
             "<h1>400 Bad Request — unsupported_response_type</h1>", status_code=400
+        )
+
+    if code_challenge_method != "S256":
+        return HTMLResponse(
+            "<h1>400 Bad Request — only code_challenge_method=S256 is supported</h1>",
+            status_code=400,
         )
 
     html = _render_login(
@@ -183,21 +180,41 @@ async def authorize_post(
     code_challenge_method: str = Form("S256"),
     state: str = Form(""),
 ) -> HTMLResponse | RedirectResponse:
-    settings = request.app.state.settings
-    allowed: list[str] = getattr(settings, "oauth_allowed_redirect_uris", [])
-    dev_mode: bool = getattr(settings, "dev_mode", False)
+    settings: Settings = request.app.state.settings
+    allowed = settings.oauth_allowed_redirect_uris
+    dev_mode = settings.dev_mode
     if not _check_redirect_uri(redirect_uri, allowed, dev_mode=dev_mode):
         return _redirect_uri_error(allowed, dev_mode)
 
+    if code_challenge_method != "S256":
+        return HTMLResponse(
+            "<h1>400 Bad Request — only code_challenge_method=S256 is supported</h1>",
+            status_code=400,
+        )
+
+    client_ip = request.client.host if request.client else "unknown"
+    ip_allowed = request.app.state.login_ip_rate_limiter.allow(client_ip)
+    user_allowed = request.app.state.login_rate_limiter.allow(f"{client_ip}:{username}")
+    if not (ip_allowed and user_allowed):
+        return HTMLResponse(
+            "<h1>429 Too Many Requests — try again later</h1>", status_code=429
+        )
+
     user_store = request.app.state.container.get(UserStorePort)  # type: ignore[type-abstract]
-    auth_codes: AuthCodeStore = request.app.state.container.get(AuthCodeStore)
+    auth_codes = request.app.state.container.get(AuthCodeStorePort)  # type: ignore[type-abstract]
+    hasher = request.app.state.container.get(PasswordHasherPort)  # type: ignore[type-abstract]
 
     user = await user_store.get_user_by_username(username)
 
-    # bcrypt is CPU-bound — run in executor to avoid blocking the event loop
+    # bcrypt is CPU-bound — run in executor to avoid blocking the event loop.
+    # The hasher verifies unknown users (hashed=None) against a dummy hash so
+    # response timing does not reveal whether the username exists.
     loop = asyncio.get_running_loop()
-    password_ok = user is not None and await loop.run_in_executor(
-        None, _verify_password, password, user.password_hash
+    password_ok = await loop.run_in_executor(
+        None,
+        hasher.verify_password,
+        password,
+        user.password_hash if user is not None else None,
     )
 
     if not password_ok:
@@ -244,10 +261,14 @@ async def token_post(
     client_id: str | None = Form(None),
     refresh_token: str | None = Form(None),
 ) -> JSONResponse:
-    jwt_service: JwtService = request.app.state.container.get(JwtService)
+    client_ip = request.client.host if request.client else "unknown"
+    if not request.app.state.token_rate_limiter.allow(client_ip):
+        return _oauth_error("rate_limited", "Too many token requests", status=429)
+
+    token_issuer = request.app.state.container.get(TokenIssuerPort)  # type: ignore[type-abstract]
     user_store = request.app.state.container.get(UserStorePort)  # type: ignore[type-abstract]
-    auth_codes: AuthCodeStore = request.app.state.container.get(AuthCodeStore)
-    settings = request.app.state.settings
+    auth_codes = request.app.state.container.get(AuthCodeStorePort)  # type: ignore[type-abstract]
+    settings: Settings = request.app.state.settings
 
     if grant_type == "authorization_code":
         return await _handle_code_exchange(
@@ -256,7 +277,7 @@ async def token_post(
             redirect_uri=redirect_uri,
             client_id=client_id,
             auth_codes=auth_codes,
-            jwt_service=jwt_service,
+            token_issuer=token_issuer,
             user_store=user_store,
             settings=settings,
         )
@@ -264,7 +285,7 @@ async def token_post(
     if grant_type == "refresh_token":
         return await _handle_refresh(
             refresh_token=refresh_token,
-            jwt_service=jwt_service,
+            token_issuer=token_issuer,
             user_store=user_store,
             settings=settings,
         )
@@ -280,14 +301,15 @@ async def _handle_code_exchange(
     code_verifier: str | None,
     redirect_uri: str | None,
     client_id: str | None,
-    auth_codes: AuthCodeStore,
-    jwt_service: JwtService,
+    auth_codes: AuthCodeStorePort,
+    token_issuer: TokenIssuerPort,
     user_store: UserStorePort,
-    settings: object,
+    settings: Settings,
 ) -> JSONResponse:
-    if not code or not code_verifier or not redirect_uri:
+    if not code or not code_verifier or not redirect_uri or not client_id:
         return _oauth_error(
-            "invalid_request", "code, code_verifier and redirect_uri are required"
+            "invalid_request",
+            "code, code_verifier, redirect_uri and client_id are required",
         )
 
     # Validate all claims against the stored entry BEFORE consuming it.
@@ -300,7 +322,7 @@ async def _handle_code_exchange(
     if entry.redirect_uri != redirect_uri:
         return _oauth_error("invalid_grant", "redirect_uri mismatch")
 
-    if client_id is not None and entry.client_id != client_id:
+    if entry.client_id != client_id:
         return _oauth_error("invalid_grant", "client_id mismatch")
 
     if not _verify_pkce(
@@ -315,7 +337,7 @@ async def _handle_code_exchange(
 
     return await _issue_token_pair(
         user_id=entry.user_id,
-        jwt_service=jwt_service,
+        token_issuer=token_issuer,
         user_store=user_store,
         settings=settings,
     )
@@ -324,9 +346,9 @@ async def _handle_code_exchange(
 async def _handle_refresh(
     *,
     refresh_token: str | None,
-    jwt_service: JwtService,
+    token_issuer: TokenIssuerPort,
     user_store: UserStorePort,
-    settings: object,
+    settings: Settings,
 ) -> JSONResponse:
     if not refresh_token:
         return _oauth_error("invalid_request", "refresh_token is required")
@@ -338,7 +360,7 @@ async def _handle_refresh(
 
     return await _issue_token_pair(
         user_id=user_id,
-        jwt_service=jwt_service,
+        token_issuer=token_issuer,
         user_store=user_store,
         settings=settings,
     )
@@ -347,14 +369,14 @@ async def _handle_refresh(
 async def _issue_token_pair(
     *,
     user_id: str,
-    jwt_service: JwtService,
+    token_issuer: TokenIssuerPort,
     user_store: UserStorePort,
-    settings: object,
+    settings: Settings,
 ) -> JSONResponse:
-    access_token, expires_in = jwt_service.issue_access_token(user_id)
-    new_refresh_token = jwt_service.issue_refresh_token()
+    access_token, expires_in = token_issuer.issue_access_token(user_id)
+    new_refresh_token = token_issuer.issue_refresh_token()
 
-    refresh_expire_days: int = getattr(settings, "jwt_refresh_token_expire_days", 30)
+    refresh_expire_days = settings.jwt_refresh_token_expire_days
     expires_at = datetime.now(UTC) + timedelta(days=refresh_expire_days)
     await user_store.save_refresh_token(new_refresh_token, user_id, expires_at)
 

@@ -3,140 +3,207 @@
 **Location:** `pantau/commands/`  
 **Rule:** One class per use-case. Depends only on `ports/` and `domain/`. No imports from `adapters/` or `interfaces/`.
 
-Commands (also called *use-cases*) are the application's business logic. Each command does exactly one thing and is named after that thing. This makes the codebase navigable: if you want to know how channel switching works, open `commands/tv/activate_channel.py`.
+Commands (also called *use-cases*) are the application's business logic. Each command does exactly one thing and is named after that thing. This makes the codebase navigable: if you want to know how volume adjustment works, open `commands/adjust_volume.py`.
+
+Commands are **device-agnostic**: they look up the device in the registry, then resolve the adapter that implements the required *capability port* via the `CapabilityResolverPort`. There are no per-backend sub-packages — the same `TurnOnCommand` works for any device whose adapter implements `PowerablePort`.
 
 ## Structure
 
 ```
 commands/
-├── tv/
-│   ├── activate_channel.py       # TurnOn a channel → start TV activity + set channel
-│   └── set_tv_mute.py            # SetMute(true/false) with assumed-state tracking
-├── blinds/
-│   ├── set_blind_position.py     # SetRangeValue(0–100) → HomeKit set_position
-│   └── adjust_blind_position.py  # AdjustRangeValue(delta) → relative adjustment
-├── heating/
-│   └── set_thermostat_temperature.py  # SetTargetTemperature → fritzctl set_temperature
-└── discover_devices.py           # Alexa.Discovery → list all configured devices
+├── _base.py                    # DeviceCommand — shared find/resolve helpers
+├── turn_on.py                  # TurnOn → PowerablePort.turn_on
+├── turn_off.py                 # TurnOff → PowerablePort.turn_off
+├── set_mute.py                 # SetMute(true/false) → MuteControllablePort
+├── set_volume.py               # SetVolume(0–100) → VolumeControllablePort
+├── adjust_volume.py            # AdjustVolume(delta) → VolumeControllablePort
+├── get_speaker_state.py        # State report: (muted, volume)
+├── set_range.py                # SetRangeValue(0–100) → RangeControllablePort
+├── adjust_range.py             # AdjustRangeValue(delta) → RangeControllablePort
+├── set_temperature.py          # SetTargetTemperature → TemperatureControllablePort
+├── adjust_temperature.py       # AdjustTargetTemperature(delta) → delegates to set
+├── discover_devices.py         # Alexa.Discovery → list all configured devices
+└── list_connected_devices.py   # Live backend inventory via ListablePort
 ```
 
 ---
 
-## ActivateChannelCommand
+## DeviceCommand (shared base)
 
-**File:** `commands/tv/activate_channel.py`
+**File:** `commands/_base.py`
 
-Turns on a TV channel. This is a two-step orchestration:
-1. Check if the `watch_activity` is already active in Harmony. If not, start it.
-2. Set the channel number.
-
-The reason for step 1: Harmony Hub activities control which devices turn on and which HDMI input is selected. If you just send `set_channel("2")` without the activity running, nothing happens.
+All device-targeting commands inherit from `DeviceCommand`, which holds the two dependencies every command needs and provides the lookup helpers:
 
 ```python
-class ActivateChannelCommand:
-    def __init__(self, registry: DeviceRegistryPort, tv: TvPort) -> None: ...
+class DeviceCommand:
+    def __init__(
+        self, registry: DeviceRegistryPort, resolver: CapabilityResolverPort
+    ) -> None:
+        self._registry = registry
+        self._resolver = resolver
 
+    def _find_device(self, endpoint_id: str) -> Device:
+        """Return the configured device or raise DeviceNotFoundError."""
+
+    def _find_and_resolve(
+        self, endpoint_id: str, capability: type[T]
+    ) -> tuple[Device, T]:
+        """Find the device and resolve the adapter implementing *capability*."""
+```
+
+`_find_device` converts a registry miss into `DeviceNotFoundError` (→ Alexa `NO_SUCH_ENDPOINT`). `_find_and_resolve` additionally asks the resolver for the adapter behind `device.adapter` that implements the requested capability port.
+
+---
+
+## TurnOnCommand / TurnOffCommand
+
+**Files:** `commands/turn_on.py`, `commands/turn_off.py`
+
+Power any device on or off via `PowerablePort`:
+
+```python
+class TurnOnCommand(DeviceCommand):
     async def execute(self, endpoint_id: str) -> None:
-        channel = self._registry.find_channel(endpoint_id)
-        if channel is None:
-            raise DeviceNotFoundError(endpoint_id)  # → Alexa NO_SUCH_ENDPOINT
-
-        await self._tv.ensure_activity(registry.tv.watch_activity)
-        await self._tv.set_channel(channel.channel_number)
+        device, adapter = self._find_and_resolve(endpoint_id, PowerablePort)
+        await adapter.turn_on(device)
 ```
 
-**Dependencies:** `DeviceRegistryPort`, `TvPort`
+For TV channel devices the Harmony adapter handles activity orchestration internally (start the watch activity, then switch the channel).
+
+**Dependencies:** `DeviceRegistryPort`, `CapabilityResolverPort` → `PowerablePort`
 
 ---
 
-## SetTvMuteCommand
+## SetMuteCommand
 
-**File:** `commands/tv/set_tv_mute.py`
+**File:** `commands/set_mute.py`
 
-Mutes or unmutes the TV. The Harmony Hub only supports a toggle IR command — no discrete mute-on/mute-off. This command tracks the *assumed* current mute state and only sends the toggle when the state needs to change.
+Mutes or unmutes a device via `MuteControllablePort.set_mute(device, mute)`. Assumed-state tracking for IR-only toggle hardware lives in the adapter (`HarmonyTvAdapter`), not in the command.
+
+**Dependencies:** `DeviceRegistryPort`, `CapabilityResolverPort` → `MuteControllablePort`
+
+---
+
+## SetVolumeCommand / AdjustVolumeCommand
+
+**Files:** `commands/set_volume.py`, `commands/adjust_volume.py`
+
+`SetVolumeCommand` sets an absolute level; the value is validated with `Percentage(value=level)` (0–100, raises `ValueError` otherwise). `AdjustVolumeCommand` applies a relative delta and **returns the new assumed level** so the handler can build an accurate Alexa response:
 
 ```python
-class SetTvMuteCommand:
-    def __init__(self, registry: DeviceRegistryPort, tv: TvPort) -> None:
-        self._assumed_state = MuteState.UNMUTED  # starts unmuted
-
-    async def execute(self, endpoint_id: str, mute: bool) -> None:
-        # ... find device ...
-        target = MuteState.MUTED if mute else MuteState.UNMUTED
-        if self._assumed_state != target:
-            await self._tv.toggle_mute()
-            self._assumed_state = target
+class AdjustVolumeCommand(DeviceCommand):
+    async def execute(self, endpoint_id: str, delta: int) -> int:
+        device, adapter = self._find_and_resolve(endpoint_id, VolumeControllablePort)
+        return await adapter.adjust_volume(device, delta)
 ```
 
-Because this command tracks state across calls, it is registered as a **singleton** in `composition.py`.
-
-**Dependencies:** `DeviceRegistryPort`, `TvPort`
+**Dependencies:** `DeviceRegistryPort`, `CapabilityResolverPort` → `VolumeControllablePort`
 
 ---
 
-## SetBlindPositionCommand
+## GetSpeakerStateCommand
 
-**File:** `commands/blinds/set_blind_position.py`
+**File:** `commands/get_speaker_state.py`
 
-Sets a blind to an absolute position (0 = closed, 100 = fully open).
+Reads the current speaker state for Alexa state reports. Resolves *two* capabilities for the same device and returns `(muted, volume)`:
 
 ```python
-async def execute(self, endpoint_id: str, percent: int) -> None:
-    device = self._registry.find_blind(endpoint_id)
-    if device is None:
-        raise DeviceNotFoundError(endpoint_id)
-
-    position = Percentage(value=percent)  # validates 0–100
-    actual = (100 - position.value) if device.invert else position.value
-    await self._blind.set_position(device.homekit_entity_id, actual)
+class GetSpeakerStateCommand(DeviceCommand):
+    async def execute(self, endpoint_id: str) -> tuple[bool, int]:
+        device = self._find_device(endpoint_id)
+        mute_adapter = self._resolver.resolve(device, MuteControllablePort)
+        volume_adapter = self._resolver.resolve(device, VolumeControllablePort)
+        return await mute_adapter.get_mute(device), await volume_adapter.get_volume(device)
 ```
 
-The `invert` flag on `BlindDevice` flips the axis for motors where the HomeKit convention is reversed.
-
-**Dependencies:** `DeviceRegistryPort`, `BlindPort`
+**Dependencies:** `DeviceRegistryPort`, `CapabilityResolverPort` → `MuteControllablePort` + `VolumeControllablePort`
 
 ---
 
-## AdjustBlindPositionCommand
+## SetRangeCommand
 
-**File:** `commands/blinds/adjust_blind_position.py`
+**File:** `commands/set_range.py`
 
-Adjusts a blind by a relative delta. "Alexa, lower the kitchen blind by 20%" sends `rangeValueDelta = -20`.
-
-The command:
-1. Reads the current position via `BlindPort.get_position()`.
-2. Adds the delta, clamping to 0–100.
-3. Sets the new absolute position.
-4. Returns the final position so the handler can build an accurate Alexa response.
-
-**Dependencies:** `DeviceRegistryPort`, `BlindPort`
-
----
-
-## SetThermostatTemperatureCommand
-
-**File:** `commands/heating/set_thermostat_temperature.py`
-
-Sets a thermostat to a target temperature.
+Sets a range device (e.g. a blind) to an absolute position (0 = closed, 100 = fully open). The percentage is validated with `Percentage(value=percent)`; axis inversion for reversed motors is handled inside `HomeKitBlindAdapter`.
 
 ```python
-async def execute(self, endpoint_id: str, celsius: float) -> None:
-    device = self._registry.find_thermostat(endpoint_id)
-    if device is None:
-        raise DeviceNotFoundError(endpoint_id)
+class SetRangeCommand(DeviceCommand):
+    async def execute(self, endpoint_id: str, percent: int) -> None:
+        device, adapter = self._find_and_resolve(endpoint_id, RangeControllablePort)
+        Percentage(value=percent)  # validates 0–100
+        await adapter.set_range(device, percent)
+```
 
-    temp = Temperature.from_float(celsius)  # rounds to 0.5 °C
-    if not (device.min_celsius <= temp.celsius <= device.max_celsius):
-        raise ValueError(f"Temperature {temp.celsius}°C outside device range ...")
+**Dependencies:** `DeviceRegistryPort`, `CapabilityResolverPort` → `RangeControllablePort`
 
-    await self._thermostat.set_temperature(device.fritz_name, temp.celsius)
+---
+
+## AdjustRangeCommand
+
+**File:** `commands/adjust_range.py`
+
+Adjusts a range device by a relative delta. "Alexa, lower the kitchen blind by 20%" sends `rangeValueDelta = -20`. Delegates to `RangeControllablePort.adjust_range(device, delta)` (the adapter reads the current position, clamps to 0–100, and sets the new value) and **returns the new position**.
+
+**Dependencies:** `DeviceRegistryPort`, `CapabilityResolverPort` → `RangeControllablePort`
+
+---
+
+## SetTemperatureCommand
+
+**File:** `commands/set_temperature.py`
+
+Sets a thermostat to a target temperature and **returns the applied (0.5-rounded) value**:
+
+```python
+class SetTemperatureCommand(DeviceCommand):
+    async def execute(self, endpoint_id: str, celsius: float) -> float:
+        device = self._find_device(endpoint_id)
+        if not isinstance(device, Thermostat):
+            raise DeviceCapabilityError(endpoint_id, "TemperatureControllable")
+
+        temp = Temperature.from_float(celsius)  # rounds to 0.5 °C
+        if not (device.min_celsius <= temp.celsius <= device.max_celsius):
+            raise ValueError(...)  # → Alexa VALUE_OUT_OF_RANGE
+
+        adapter = self._resolver.resolve(device, TemperatureControllablePort)
+        await adapter.set_temperature(device, temp.celsius)
+        return temp.celsius
 ```
 
 Two layers of range validation:
-- `Temperature.from_float()` enforces the global safe range (8–28 °C).
+- `Temperature.from_float()` enforces the global safe range.
 - The command enforces the *per-device* min/max from `devices.yaml`.
 
-**Dependencies:** `DeviceRegistryPort`, `ThermostatPort`
+**Dependencies:** `DeviceRegistryPort`, `CapabilityResolverPort` → `TemperatureControllablePort`
+
+---
+
+## AdjustTemperatureCommand
+
+**File:** `commands/adjust_temperature.py`
+
+Adjusts the thermostat target by a relative delta. It reads the current target setpoint via `TemperatureControllablePort.get_temperature()`, adds the delta, and **delegates to `SetTemperatureCommand`** — so rounding and both range validations apply identically:
+
+```python
+class AdjustTemperatureCommand(DeviceCommand):
+    def __init__(
+        self,
+        registry: DeviceRegistryPort,
+        resolver: CapabilityResolverPort,
+        set_temperature: SetTemperatureCommand,
+    ) -> None: ...
+
+    async def execute(self, endpoint_id: str, delta_celsius: float) -> float:
+        ...
+        current = await adapter.get_temperature(device)
+        return await self._set_temperature.execute(
+            endpoint_id, celsius=current + delta_celsius
+        )
+```
+
+Returns the applied setpoint.
+
+**Dependencies:** `DeviceRegistryPort`, `CapabilityResolverPort`, `SetTemperatureCommand`
 
 ---
 
@@ -147,11 +214,14 @@ Two layers of range validation:
 Returns all configured devices as a flat list of `DiscoveredDevice` objects. The Alexa Discovery handler then maps each device to the correct Alexa capability descriptor.
 
 ```python
-@dataclass(frozen=True, slots=True)
-class DiscoveredDevice:
+CapabilityKind = Literal["power", "speaker", "range", "thermostat"]
+
+class DiscoveredDevice(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     id: str
-    friendly_name: str
-    capability: Literal["power", "speaker", "range", "thermostat"]
+    name: str
+    capability: CapabilityKind
 
 class DiscoverDevicesCommand:
     async def execute(self) -> list[DiscoveredDevice]:
@@ -164,3 +234,27 @@ class DiscoverDevicesCommand:
 ```
 
 **Dependencies:** `DeviceRegistryPort`
+
+---
+
+## ListConnectedDevicesCommand
+
+**File:** `commands/list_connected_devices.py`
+
+Queries every registered adapter that implements `ListablePort` for its live backend inventory and returns a mapping of `adapter_name → serialisable data`:
+
+```python
+class ListConnectedDevicesCommand:
+    def __init__(self, resolver: CapabilityResolverPort) -> None: ...
+
+    async def execute(self) -> dict[str, dict]:
+        adapters = self._resolver.all_implementing(ListablePort)
+        backends = await asyncio.gather(
+            *[a.list_backend() for a in adapters], return_exceptions=True
+        )
+        ...
+```
+
+Each backend is queried independently. If one is offline its entry carries `status="unavailable"` and an error message; the other backends are unaffected. Adding a new adapter (e.g. Hue, Sonos) only requires implementing `ListablePort` and registering it — this command never changes.
+
+**Dependencies:** `CapabilityResolverPort` → `ListablePort`

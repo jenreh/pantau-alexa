@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from pydantic import SecretStr
 
 from tests.interfaces.oauth.conftest import (
     DEVICES_YAML,
@@ -69,6 +70,20 @@ class TestAuthorizeGet:
                 "client_id": TEST_CLIENT_ID,
                 "redirect_uri": TEST_REDIRECT_URI,
                 "code_challenge": challenge,
+            },
+        )
+        assert resp.status_code == 400
+
+    def test_plain_challenge_method_returns_400(self, client: TestClient) -> None:
+        """PKCE 'plain' is a downgrade of S256 and must be rejected."""
+        resp = client.get(
+            "/oauth/authorize",
+            params={
+                "response_type": "code",
+                "client_id": TEST_CLIENT_ID,
+                "redirect_uri": TEST_REDIRECT_URI,
+                "code_challenge": "plain-text-challenge",
+                "code_challenge_method": "plain",
             },
         )
         assert resp.status_code == 400
@@ -196,12 +211,12 @@ class TestRedirectUriAllowlist:
         cfg.write_text(DEVICES_YAML, encoding="utf-8")
         store = SqliteUserStore(":memory:")
         await store.start()
-        jwt_svc = JwtService(Settings(jwt_secret="test-secret"))
+        jwt_svc = JwtService("test-secret-0123456789abcdefghij")
         auth_codes = AuthCodeStore()
         container = build_oauth_test_container(cfg, store, jwt_svc, auth_codes)
         # dev_mode=False (default) + empty allowlist → fail-closed
         settings = Settings(
-            jwt_secret="test-secret",
+            jwt_secret=SecretStr("test-secret-0123456789abcdefghij"),
             dev_mode=False,
             oauth_allowed_redirect_uris=[],
         )

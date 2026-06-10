@@ -5,20 +5,14 @@ from __future__ import annotations
 import pytest
 
 from pantau.adapters.jwt_service import JwtService
-from pantau.config.settings import Settings
 from pantau.ports.token_validator_port import TokenClaims
 
-
-@pytest.fixture
-def settings() -> Settings:
-    return Settings(
-        jwt_secret="super-secret-test-key", jwt_access_token_expire_minutes=60
-    )
+TEST_SECRET = "super-secret-test-key"  # noqa: S105
 
 
 @pytest.fixture
-def service(settings: Settings) -> JwtService:
-    return JwtService(settings)
+def service() -> JwtService:
+    return JwtService(TEST_SECRET, access_token_expire_minutes=60)
 
 
 class TestIssueAccessToken:
@@ -68,17 +62,11 @@ class TestValidate:
         with pytest.raises(ValueError):
             service.validate("not.a.valid.jwt")
 
-    def test_token_from_different_secret_raises_value_error(
-        self, settings: Settings
-    ) -> None:
-        other_settings = Settings(
-            jwt_secret="different-secret",
-            jwt_access_token_expire_minutes=60,
-        )
-        other_service = JwtService(other_settings)
+    def test_token_from_different_secret_raises_value_error(self) -> None:
+        other_service = JwtService("different-secret")
         token, _ = other_service.issue_access_token("user-x")
 
-        original = JwtService(settings)
+        original = JwtService(TEST_SECRET, access_token_expire_minutes=60)
         with pytest.raises(ValueError):
             original.validate(token)
 
@@ -87,11 +75,7 @@ class TestValidate:
             service.validate("")
 
     def test_expired_token_raises_value_error(self) -> None:
-        settings = Settings(
-            jwt_secret="test-key",
-            jwt_access_token_expire_minutes=0,  # immediate expiry for test
-        )
-        service = JwtService(settings)
+        service = JwtService("test-key", access_token_expire_minutes=0)
         # Issue with 0-minute expiry → token is immediately expired
         # We can't easily travel in time, so test with a manipulated payload instead
         from jose import jwt as jose_jwt
