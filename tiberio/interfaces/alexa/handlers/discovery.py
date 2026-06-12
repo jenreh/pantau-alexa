@@ -47,7 +47,7 @@ def _thermostat_capability() -> dict:
         "properties": {
             "supported": [{"name": "targetSetpoint"}],
             "proactivelyReported": False,
-            "retrievable": False,
+            "retrievable": True,
         },
         "configuration": {
             "supportedModes": ["HEAT"],
@@ -65,7 +65,7 @@ def _range_capability() -> dict:
         "properties": {
             "supported": [{"name": "rangeValue"}],
             "proactivelyReported": False,
-            "retrievable": False,
+            "retrievable": True,
         },
         "capabilityResources": {
             "friendlyNames": [

@@ -33,15 +33,19 @@ class DiscoverDevicesCommand:
 
         channels = [
             DiscoveredDevice(id=ch.id, name=ch.name, capability="power")
-            for ch in registry.tv.channels
+            for ch in (registry.tv.channels if registry.tv else ())
         ]
-        audio = [
-            DiscoveredDevice(
-                id=registry.tv.audio.id,
-                name=registry.tv.audio.name,
-                capability="speaker",
-            )
-        ]
+        audio = (
+            [
+                DiscoveredDevice(
+                    id=registry.tv.audio.id,
+                    name=registry.tv.audio.name,
+                    capability="speaker",
+                )
+            ]
+            if registry.tv
+            else []
+        )
         blinds = [
             DiscoveredDevice(id=b.id, name=b.name, capability="range")
             for b in registry.blinds

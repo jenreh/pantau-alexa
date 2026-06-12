@@ -30,6 +30,7 @@ from tiberio.commands.adjust_range import AdjustRangeCommand
 from tiberio.commands.adjust_temperature import AdjustTemperatureCommand
 from tiberio.commands.adjust_volume import AdjustVolumeCommand
 from tiberio.commands.discover_devices import DiscoverDevicesCommand
+from tiberio.commands.get_device_state import GetDeviceStateCommand
 from tiberio.commands.get_speaker_state import GetSpeakerStateCommand
 from tiberio.commands.list_connected_devices import ListConnectedDevicesCommand
 from tiberio.commands.set_mute import SetMuteCommand
@@ -49,6 +50,7 @@ from tiberio.domain.models import (
 from tiberio.interfaces.alexa.handlers.discovery import DiscoveryHandler
 from tiberio.interfaces.alexa.handlers.power import PowerHandler
 from tiberio.interfaces.alexa.handlers.range import RangeHandler
+from tiberio.interfaces.alexa.handlers.report_state import ReportStateHandler
 from tiberio.interfaces.alexa.handlers.speaker import SpeakerHandler
 from tiberio.interfaces.alexa.handlers.thermostat import ThermostatHandler
 from tiberio.interfaces.alexa.router import AlexaDirectiveRouter
@@ -224,6 +226,7 @@ def _wire_commands_and_router(container: Container) -> None:
         container,  # type: ignore[arg-type]
         set_temperature,
     )
+    get_device_state = GetDeviceStateCommand(registry_port, container)  # type: ignore[arg-type]
     discover = DiscoverDevicesCommand(registry_port)
     list_connected = ListConnectedDevicesCommand(container)  # type: ignore[arg-type]
 
@@ -237,6 +240,7 @@ def _wire_commands_and_router(container: Container) -> None:
     container.register(AdjustRangeCommand, adjust_range)
     container.register(SetTemperatureCommand, set_temperature)
     container.register(AdjustTemperatureCommand, adjust_temperature)
+    container.register(GetDeviceStateCommand, get_device_state)
     container.register(DiscoverDevicesCommand, discover)
     container.register(ListConnectedDevicesCommand, list_connected)
 
@@ -247,6 +251,7 @@ def _wire_commands_and_router(container: Container) -> None:
     thermostat_handler = ThermostatHandler(set_temperature, adjust_temperature)
     range_handler = RangeHandler(set_range, adjust_range)
     discovery_handler = DiscoveryHandler(discover)
+    report_state_handler = ReportStateHandler(get_device_state)
 
     alexa_router = AlexaDirectiveRouter(
         power=power_handler,
@@ -254,6 +259,7 @@ def _wire_commands_and_router(container: Container) -> None:
         thermostat=thermostat_handler,
         range_=range_handler,
         discovery=discovery_handler,
+        report_state=report_state_handler,
     )
     container.register(AlexaDirectiveRouter, alexa_router)
     log.info(

@@ -73,9 +73,7 @@ class AlexaHandler:
 
         try:
             properties = await self._execute(ctx)
-            return build_response(
-                ctx.correlation_token, ctx.endpoint_id, ctx.bearer_token, properties
-            )
+            return self._build_success(ctx, properties)
         except InvalidPayloadError as exc:
             return self._error(ctx, "INVALID_VALUE", str(exc))
         except ValueError as exc:
@@ -99,6 +97,12 @@ class AlexaHandler:
     async def _execute(self, ctx: DirectiveContext) -> list[dict]:
         """Run the directive; returns the Alexa context properties."""
         raise NotImplementedError
+
+    def _build_success(self, ctx: DirectiveContext, properties: list[dict]) -> dict:
+        """Wrap the properties in an Alexa.Response. Override for StateReport."""
+        return build_response(
+            ctx.correlation_token, ctx.endpoint_id, ctx.bearer_token, properties
+        )
 
     @staticmethod
     def _error(ctx: DirectiveContext, error_type: str, message: str) -> dict:

@@ -86,13 +86,14 @@ class DeviceRegistry(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    tv: Tv
-    blinds: tuple[WindowBlind, ...]
-    thermostats: tuple[Thermostat, ...]
+    tv: Tv | None = None
+    blinds: tuple[WindowBlind, ...] = ()
+    thermostats: tuple[Thermostat, ...] = ()
 
     def all_devices(self) -> tuple[Device, ...]:
         """Every configured device, regardless of type."""
-        return (self.tv.audio, *self.tv.channels, *self.blinds, *self.thermostats)
+        tv_devices = (self.tv.audio, *self.tv.channels) if self.tv else ()
+        return (*tv_devices, *self.blinds, *self.thermostats)
 
 
 # ---------------------------------------------------------------------------

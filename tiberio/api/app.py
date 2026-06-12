@@ -222,7 +222,7 @@ def _register_routes(app: FastAPI) -> None:
             {
                 "status": "ok",
                 "devices": {
-                    "channels": len(registry.tv.channels),
+                    "channels": len(registry.tv.channels) if registry.tv else 0,
                     "blinds": len(registry.blinds),
                     "thermostats": len(registry.thermostats),
                 },

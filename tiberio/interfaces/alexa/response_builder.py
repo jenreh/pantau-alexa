@@ -36,7 +36,8 @@ def build_property(
     return prop
 
 
-def build_response(
+def _build_event_with_context(
+    response_name: str,
     correlation_token: str | None,
     endpoint_id: str,
     bearer_token: str | None,
@@ -48,7 +49,7 @@ def build_response(
 
     header: dict = {
         "namespace": "Alexa",
-        "name": "Response",
+        "name": response_name,
         "messageId": _new_message_id(),
         "payloadVersion": "3",
     }
@@ -63,6 +64,30 @@ def build_response(
         },
         "context": {"properties": properties},
     }
+
+
+def build_response(
+    correlation_token: str | None,
+    endpoint_id: str,
+    bearer_token: str | None,
+    properties: list[dict],
+) -> dict:
+    """Build an Alexa.Response (the reply to a state-changing directive)."""
+    return _build_event_with_context(
+        "Response", correlation_token, endpoint_id, bearer_token, properties
+    )
+
+
+def build_state_report(
+    correlation_token: str | None,
+    endpoint_id: str,
+    bearer_token: str | None,
+    properties: list[dict],
+) -> dict:
+    """Build an Alexa.StateReport (the reply to an Alexa.ReportState directive)."""
+    return _build_event_with_context(
+        "StateReport", correlation_token, endpoint_id, bearer_token, properties
+    )
 
 
 def build_discovery_response(endpoints: list[dict]) -> dict:

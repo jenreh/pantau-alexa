@@ -2,57 +2,57 @@
 # Adding a new channel or device requires only config changes (no code change).
 #
 
-tv:
-  watch_activity: "Fernseher" # Harmony activity name that switches on the TV
-  aliases: ["den Fernseher", "TV", "Fernsehgerät", "Fernseh Apparat"] # Alexa device name aliases
+# tv:
+#   watch_activity: "Fernseher" # Harmony activity name that switches on the TV
+#   aliases: ["den Fernseher", "TV", "Fernsehgerät", "Fernseh Apparat"] # Alexa device name aliases
 
-  audio:
-    id: "tv-audio"
-    friendly_name: "Fernseher" # "schalte den Fernseher stumm" / "Ton ein"
+#   audio:
+#     id: "tv-audio"
+#     friendly_name: "Fernseher" # "schalte den Fernseher stumm" / "Ton ein"
 
-  channels:
-    # Each channel becomes a separate Alexa PowerController endpoint.
-    # "Alexa, schalte ZDF ein" → TurnOn on endpoint "zdf"
-    - id: "ard"
-      friendly_name: "ARD"
-      aliases: ["ARD", "Erstes", "Das Erste", "A R D"]
-      channel_number: "1"
-    - id: "zdf"
-      friendly_name: "ZDF"
-      aliases: ["ZDF", "Zweites", "Z D F", "Zedef", "Zedef", "das zweite"]
-      channel_number: "2"
-    - id: "rtl"
-      friendly_name: "RTL"
-      aliases: ["RTL", "RTL Television", "RTL TV"]
-      channel_number: "3"
-    - id: "sat1"
-      friendly_name: "SAT.1"
-      aliases: ["SAT1", "Sat.1", "SAT 1", "sat eins"]
-      channel_number: "4"
-    - id: "pro7"
-      friendly_name: "ProSieben"
-      aliases: ["Pro7", "ProSieben", "Pro Sieben"]
-      channel_number: "5"
-    - id: "rtl2"
-      friendly_name: "RTL II"
-      aliases: ["RTL2", "RTL II", "RTL Zwei"]
-      channel_number: "6"
-    - id: "vox"
-      friendly_name: "VOX"
-      aliases: ["VOX", "wox"]
-      channel_number: "7"
-    - id: "kabel1"
-      friendly_name: "Kabel Eins"
-      aliases: ["Kabel 1", "Kabel Eins", "Kabel1"]
-      channel_number: "8"
-    - id: "zdfNeo"
-      friendly_name: "ZDFneo"
-      aliases: ["ZDFneo", "ZDF Neo", "ZDF NEO"]
-      channel_number: "9"
-    - id: "sixx"
-      friendly_name: "sixx"
-      aliases: ["sixx", "six", "sicks"]
-      channel_number: "10"
+#   channels:
+#     # Each channel becomes a separate Alexa PowerController endpoint.
+#     # "Alexa, schalte ZDF ein" → TurnOn on endpoint "zdf"
+#     - id: "ard"
+#       friendly_name: "ARD"
+#       aliases: ["ARD", "Erstes", "Das Erste", "A R D"]
+#       channel_number: "1"
+#     - id: "zdf"
+#       friendly_name: "ZDF"
+#       aliases: ["ZDF", "Zweites", "Z D F", "Zedef", "Zedef", "das zweite"]
+#       channel_number: "2"
+#     - id: "rtl"
+#       friendly_name: "RTL"
+#       aliases: ["RTL", "RTL Television", "RTL TV"]
+#       channel_number: "3"
+#     - id: "sat1"
+#       friendly_name: "SAT.1"
+#       aliases: ["SAT1", "Sat.1", "SAT 1", "sat eins"]
+#       channel_number: "4"
+#     - id: "pro7"
+#       friendly_name: "ProSieben"
+#       aliases: ["Pro7", "ProSieben", "Pro Sieben"]
+#       channel_number: "5"
+#     - id: "rtl2"
+#       friendly_name: "RTL II"
+#       aliases: ["RTL2", "RTL II", "RTL Zwei"]
+#       channel_number: "6"
+#     - id: "vox"
+#       friendly_name: "VOX"
+#       aliases: ["VOX", "wox"]
+#       channel_number: "7"
+#     - id: "kabel1"
+#       friendly_name: "Kabel Eins"
+#       aliases: ["Kabel 1", "Kabel Eins", "Kabel1"]
+#       channel_number: "8"
+#     - id: "zdfNeo"
+#       friendly_name: "ZDFneo"
+#       aliases: ["ZDFneo", "ZDF Neo", "ZDF NEO"]
+#       channel_number: "9"
+#     - id: "sixx"
+#       friendly_name: "sixx"
+#       aliases: ["sixx", "six", "sicks"]
+#       channel_number: "10"
 
 blinds:
   # Each blind/rollo is controlled via homekit-py (set_position 0–100).

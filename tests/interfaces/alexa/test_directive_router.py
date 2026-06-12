@@ -572,6 +572,14 @@ class TestDiscovery:
         assert "Alexa.ThermostatController" in interfaces
         assert thermostat["displayCategories"] == ["THERMOSTAT"]
 
+        thermostat_cap = next(
+            c
+            for c in thermostat["capabilities"]
+            if c.get("interface") == "Alexa.ThermostatController"
+        )
+        # Must be retrievable so Alexa queries and displays the current setpoint.
+        assert thermostat_cap["properties"]["retrievable"] is True
+
     def test_discover_blind_has_range_controller_with_instance(
         self, client: TestClient
     ) -> None:
@@ -590,6 +598,8 @@ class TestDiscovery:
         assert range_cap["configuration"]["supportedRange"]["maximumValue"] == 100
         assert "semantics" in range_cap
         assert blind["displayCategories"] == ["INTERIOR_BLIND"]
+        # Must be retrievable so Alexa queries and displays the current position.
+        assert range_cap["properties"]["retrievable"] is True
 
 
 class TestDirectiveRouterEdgeCases:
@@ -967,3 +977,96 @@ class TestHandlerValidation:
 
         assert body["event"]["header"]["name"] == "ErrorResponse"
         assert body["event"]["payload"]["type"] == "VALUE_OUT_OF_RANGE"
+
+
+class TestReportState:
+    """Alexa.ReportState — returns the current state of an endpoint.
+
+    Alexa sends this to refresh the state shown in the app; the reply must be
+    an Alexa.StateReport carrying the endpoint's current property values.
+    """
+
+    def test_report_state_returns_200(self, client: TestClient) -> None:
+        resp = client.post(
+            "/alexa/directive",
+            json=directive("Alexa", "ReportState", endpoint_id="wohnzimmer-heizung"),
+        )
+        assert resp.status_code == 200
+
+    def test_report_state_returns_state_report_shape(self, client: TestClient) -> None:
+        body = client.post(
+            "/alexa/directive",
+            json=directive("Alexa", "ReportState", endpoint_id="wohnzimmer-heizung"),
+        ).json()
+
+        event = body["event"]
+        assert event["header"]["namespace"] == "Alexa"
+        assert event["header"]["name"] == "StateReport"
+        assert event["header"]["correlationToken"] == "test-correlation-token"
+        assert event["endpoint"]["endpointId"] == "wohnzimmer-heizung"
+        assert event["payload"] == {}
+
+    def test_report_state_thermostat_reports_target_setpoint(
+        self, client: TestClient
+    ) -> None:
+        # Seed a known setpoint so the report has a deterministic value.
+        client.post(
+            "/alexa/directive",
+            json=directive(
+                "Alexa.ThermostatController",
+                "SetTargetTemperature",
+                endpoint_id="wohnzimmer-heizung",
+                payload={"targetSetpoint": {"value": 21.0, "scale": "CELSIUS"}},
+            ),
+        )
+        body = client.post(
+            "/alexa/directive",
+            json=directive("Alexa", "ReportState", endpoint_id="wohnzimmer-heizung"),
+        ).json()
+
+        prop = body["context"]["properties"][0]
+        assert prop["namespace"] == "Alexa.ThermostatController"
+        assert prop["name"] == "targetSetpoint"
+        assert prop["value"] == {"value": 21.0, "scale": "CELSIUS"}
+
+    def test_report_state_blind_reports_range_value(self, client: TestClient) -> None:
+        client.post(
+            "/alexa/directive",
+            json=directive(
+                "Alexa.RangeController",
+                "SetRangeValue",
+                endpoint_id="kueche-rollo",
+                payload={"rangeValue": 40},
+                instance="Blind.Position",
+            ),
+        )
+        body = client.post(
+            "/alexa/directive",
+            json=directive("Alexa", "ReportState", endpoint_id="kueche-rollo"),
+        ).json()
+
+        prop = body["context"]["properties"][0]
+        assert prop["namespace"] == "Alexa.RangeController"
+        assert prop["name"] == "rangeValue"
+        assert prop["value"] == 40
+        assert prop["instance"] == "Blind.Position"
+
+    def test_report_state_unknown_endpoint_returns_error(
+        self, client: TestClient
+    ) -> None:
+        body = client.post(
+            "/alexa/directive",
+            json=directive("Alexa", "ReportState", endpoint_id="does-not-exist"),
+        ).json()
+
+        assert body["event"]["header"]["name"] == "ErrorResponse"
+        assert body["event"]["payload"]["type"] == "NO_SUCH_ENDPOINT"
+
+    def test_report_state_on_tv_channel_returns_error(self, client: TestClient) -> None:
+        body = client.post(
+            "/alexa/directive",
+            json=directive("Alexa", "ReportState", endpoint_id="zdf"),
+        ).json()
+
+        assert body["event"]["header"]["name"] == "ErrorResponse"
+        assert body["event"]["payload"]["type"] == "INVALID_VALUE"

@@ -28,9 +28,10 @@ class YamlDeviceRegistry:
 
     def __init__(self, config_path: Path) -> None:
         self._registry = _load(config_path)
+        tv = self._registry.tv
         log.info(
             "DeviceRegistry loaded: %d channels, %d blinds, %d thermostats",
-            len(self._registry.tv.channels),
+            len(tv.channels) if tv else 0,
             len(self._registry.blinds),
             len(self._registry.thermostats),
         )
@@ -47,31 +48,9 @@ class YamlDeviceRegistry:
 
 def _load(path: Path) -> DeviceRegistry:
     with path.open(encoding="utf-8") as fh:
-        raw = yaml.safe_load(fh)
+        raw = yaml.safe_load(fh) or {}
 
-    tv_raw = raw["tv"]
-    watch_activity = tv_raw["watch_activity"]
-    audio = TvAudio(
-        id=tv_raw["audio"]["id"],
-        name=tv_raw["audio"]["friendly_name"],
-        adapter=ADAPTER_HARMONY,
-    )
-    channels = tuple(
-        TvChannel(
-            id=ch["id"],
-            name=ch["friendly_name"],
-            adapter=ADAPTER_HARMONY,
-            aliases=tuple(ch.get("aliases", [])),
-            channel_number=str(ch.get("channel_number", "")),
-            watch_activity=watch_activity,
-        )
-        for ch in tv_raw.get("channels", [])
-    )
-    tv = Tv(
-        watch_activity=watch_activity,
-        audio=audio,
-        channels=channels,
-    )
+    tv = _load_tv(raw.get("tv"))
 
     blinds = tuple(
         WindowBlind(
@@ -101,6 +80,31 @@ def _load(path: Path) -> DeviceRegistry:
     registry = DeviceRegistry(tv=tv, blinds=blinds, thermostats=thermostats)
     _ensure_unique_ids(registry)
     return registry
+
+
+def _load_tv(tv_raw: dict | None) -> Tv | None:
+    """Build the optional TV configuration; ``None`` when no ``tv`` section."""
+    if not tv_raw:
+        return None
+
+    watch_activity = tv_raw["watch_activity"]
+    audio = TvAudio(
+        id=tv_raw["audio"]["id"],
+        name=tv_raw["audio"]["friendly_name"],
+        adapter=ADAPTER_HARMONY,
+    )
+    channels = tuple(
+        TvChannel(
+            id=ch["id"],
+            name=ch["friendly_name"],
+            adapter=ADAPTER_HARMONY,
+            aliases=tuple(ch.get("aliases", [])),
+            channel_number=str(ch.get("channel_number", "")),
+            watch_activity=watch_activity,
+        )
+        for ch in tv_raw.get("channels", [])
+    )
+    return Tv(watch_activity=watch_activity, audio=audio, channels=channels)
 
 
 def _ensure_unique_ids(registry: DeviceRegistry) -> None:

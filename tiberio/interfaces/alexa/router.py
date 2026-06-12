@@ -12,6 +12,7 @@ from collections.abc import Awaitable, Callable
 from tiberio.interfaces.alexa.handlers.discovery import DiscoveryHandler
 from tiberio.interfaces.alexa.handlers.power import PowerHandler
 from tiberio.interfaces.alexa.handlers.range import RangeHandler
+from tiberio.interfaces.alexa.handlers.report_state import ReportStateHandler
 from tiberio.interfaces.alexa.handlers.speaker import SpeakerHandler
 from tiberio.interfaces.alexa.handlers.thermostat import ThermostatHandler
 from tiberio.interfaces.alexa.models import AlexaDirectiveRequest
@@ -32,6 +33,7 @@ class AlexaDirectiveRouter:
         thermostat: ThermostatHandler,
         range_: RangeHandler,
         discovery: DiscoveryHandler,
+        report_state: ReportStateHandler,
     ) -> None:
         self._dispatch: dict[tuple[str, str], HandlerFn] = {
             ("Alexa.PowerController", "TurnOn"): power.handle,
@@ -47,6 +49,7 @@ class AlexaDirectiveRouter:
             ("Alexa.RangeController", "SetRangeValue"): range_.handle,
             ("Alexa.RangeController", "AdjustRangeValue"): range_.handle,
             ("Alexa.Discovery", "Discover"): discovery.handle,
+            ("Alexa", "ReportState"): report_state.handle,
         }
 
     @property
