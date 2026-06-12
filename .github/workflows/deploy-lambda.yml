@@ -1,0 +1,61 @@
+name: Deploy Lambda
+
+# Deploys the Python code of the two edge Lambda functions
+# (tiberio-directive-proxy, tiberio-oauth-proxy) by packaging lambda/ and
+# calling aws lambda update-function-code. This does NOT touch infrastructure
+# — provision/configure the functions, IAM, and SSM via Terraform first.
+#
+# Requirements (configure once in repo settings):
+#   - Variable AWS_DEPLOY_ROLE_ARN: IAM role assumed via GitHub OIDC, with a
+#     trust policy for token.actions.githubusercontent.com scoped to this repo,
+#     and permissions: lambda:UpdateFunctionCode, lambda:PublishVersion,
+#     lambda:GetFunction on both function ARNs.
+#   - Variable AWS_REGION (optional): defaults to eu-west-1.
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+  id-token: write # required for OIDC
+
+# Never run two deploys against the same functions concurrently.
+concurrency:
+  group: deploy-lambda
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    strategy:
+      # Deploy both functions independently; one failing does not abort the other.
+      fail-fast: false
+      matrix:
+        function:
+          - tiberio-directive-proxy
+          - tiberio-oauth-proxy
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Package Lambda functions
+        run: ./scripts/package-lambdas.sh
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION || 'eu-west-1' }}
+
+      - name: Deploy ${{ matrix.function }}
+        run: |
+          aws lambda update-function-code \
+            --function-name "${{ matrix.function }}" \
+            --zip-file "fileb://dist/lambda/${{ matrix.function }}.zip" \
+            --publish
+          aws lambda wait function-updated \
+            --function-name "${{ matrix.function }}"
+          echo "✅ Deployed ${{ matrix.function }}"

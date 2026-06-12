@@ -7,11 +7,6 @@ einzelnen Haushalt. Der Skill steuert Geräte (Fernseher, Rollos,
 Heizungsthermostate) über einen vom Betreiber selbst betriebenen Heimserver. Er
 ist nicht für die öffentliche Zertifizierung oder Verbreitung vorgesehen.
 
-## Verantwortlicher
-
-Jens Rehpöhler
-Kontakt: spotnik08@gmail.com
-
 ## Welche Daten verarbeitet werden
 
 - **Anmeldedaten (Account Linking):** Beim Verknüpfen des Skills meldest du dich
@@ -50,4 +45,4 @@ Account-Verknüpfung lässt sich zudem jederzeit in der Alexa-App aufheben.
 
 ## Kontakt
 
-Bei Fragen zum Datenschutz: spotnik08@gmail.com
+Bei Fragen zum Datenschutz: <spotnik08@gmail.com>

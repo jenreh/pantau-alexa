@@ -18,7 +18,7 @@ variable "alexa_skill_id" {
 variable "beacon_bucket_name" {
   description = "Globally unique name of the beacon S3 bucket."
   type        = string
-  default     = "tiberio-beacon"
+  default     = "tiberio-beacon-v2"
 }
 
 variable "beacon_object_key" {
@@ -80,5 +80,28 @@ variable "lambda_runtime" {
 variable "state_bucket_name" {
   description = "Name of the S3 bucket holding the Terraform state (bootstrap)."
   type        = string
-  default     = "tiberio-tfstate"
+  default     = "tiberio-tfstate-v2"
+}
+
+# ── GitHub Actions OIDC deploy role ──────────────────────────────────────────
+variable "github_repository" {
+  description = "GitHub repository (owner/repo) allowed to assume the deploy role."
+  type        = string
+  default     = "jenreh/tiberio"
+}
+
+variable "create_github_oidc_provider" {
+  description = <<-EOT
+    Create the GitHub OIDC provider. Set false (and pass
+    existing_github_oidc_provider_arn) if the account already has one — AWS
+    permits only a single provider per URL.
+  EOT
+  type        = bool
+  default     = true
+}
+
+variable "existing_github_oidc_provider_arn" {
+  description = "ARN of a pre-existing GitHub OIDC provider (when create_github_oidc_provider = false)."
+  type        = string
+  default     = null
 }

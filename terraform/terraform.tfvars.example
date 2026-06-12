@@ -1,10 +1,16 @@
 # Copy to terraform.tfvars (git-ignored) and fill in real values.
 
 aws_region        = "eu-west-1"
-state_bucket_name = "tiberio-tfstate" # must be globally unique
+state_bucket_name = "tiberio-tfstate-v2" # must be globally unique
 
 alexa_skill_id     = "amzn1.ask.skill.00000000-0000-0000-0000-000000000000"
-beacon_bucket_name = "tiberio-beacon" # must be globally unique
+beacon_bucket_name = "tiberio-beacon-v2" # must be globally unique
 
 # Prefer TF_VAR_shared_secret over storing the secret in this file.
 # shared_secret = "..."
+
+# GitHub Actions OIDC deploy role (deploy-lambda.yml).
+github_repository = "jenreh/tiberio"
+# If the account already has a GitHub OIDC provider, reuse it:
+# create_github_oidc_provider       = false
+# existing_github_oidc_provider_arn = "arn:aws:iam::<account-id>:oidc-provider/token.actions.githubusercontent.com"

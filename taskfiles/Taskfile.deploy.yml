@@ -1,0 +1,31 @@
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+
+version: "3"
+
+silent: true
+
+vars:
+  AWS_REGION: '{{.AWS_REGION | default "eu-west-1"}}'
+  FUNCTIONS: tiberio-directive-proxy tiberio-oauth-proxy
+
+tasks:
+  package:
+    desc: Package both edge Lambda functions into dist/lambda/*.zip
+    cmd: ./scripts/package-lambdas.sh
+
+  push:
+    desc: Package and deploy Lambda code to AWS (requires AWS credentials)
+    deps: [package]
+    cmds:
+      - |
+        for fn in {{.FUNCTIONS}}; do
+          echo "▶ Deploying $fn..."
+          aws lambda update-function-code \
+            --region {{.AWS_REGION}} \
+            --function-name "$fn" \
+            --zip-file "fileb://dist/lambda/$fn.zip" \
+            --publish >/dev/null
+          aws lambda wait function-updated \
+            --region {{.AWS_REGION}} --function-name "$fn"
+        done
+      - echo "✅ Lambda code deployed"

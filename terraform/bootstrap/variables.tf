@@ -10,7 +10,7 @@ variable "state_bucket_name" {
     for the main (phase 2) configuration.
   EOT
   type        = string
-  default     = "tiberio-tfstate"
+  default     = "tiberio-tfstate-v2"
 }
 
 variable "state_key" {

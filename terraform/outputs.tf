@@ -23,6 +23,11 @@ output "home_publisher_user_name" {
   value       = module.iam.home_publisher_user_name
 }
 
+output "github_deploy_role_arn" {
+  description = "Set this as the AWS_DEPLOY_ROLE_ARN GitHub Actions variable."
+  value       = module.github_oidc.deploy_role_arn
+}
+
 # Consumed by deploy-aws.sh after a successful phase-2 apply.
 output "deployment_summary" {
   description = "Key values needed for the Alexa skill configuration."

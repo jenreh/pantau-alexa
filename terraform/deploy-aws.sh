@@ -126,9 +126,22 @@ read_tfvar() {
     done
     [[ -n "$value" ]] && { echo "$value"; return; }
 
-    # Then check the tfvars file
+    # Then check the tfvars file. Use awk with POSIX classes ([[:space:]])
+    # instead of GNU-only \s so this works under macOS/BSD tools: strip the
+    # key and '=', drop any inline '# comment', remove quotes, and trim
+    # surrounding whitespace (a stray trailing space yields an invalid S3
+    # bucket name).
     if [[ -n "$TFVARS_FILE" && -f "$TFVARS_FILE" ]]; then
-        value=$(grep -E "^\s*${var_name}\s*=" "$TFVARS_FILE" | tail -1 | sed 's/.*= *"\{0,1\}\([^"]*\)"\{0,1\}/\1/' | sed 's/\s*#.*//')
+        value=$(awk -F= -v key="$var_name" '
+            $0 ~ "^[[:space:]]*" key "[[:space:]]*=" {
+                sub(/^[^=]*=/, "")
+                sub(/#.*/, "")
+                gsub(/"/, "")
+                gsub(/^[[:space:]]+|[[:space:]]+$/, "")
+                last = $0
+            }
+            END { if (last != "") print last }
+        ' "$TFVARS_FILE")
     fi
     [[ -n "$value" ]] && { echo "$value"; return; }
 
@@ -143,7 +156,7 @@ generate_backend_hcl() {
     bucket=$(read_tfvar "state_bucket_name")
     region=$(read_tfvar "aws_region")
 
-    [[ -n "$bucket" ]] || bucket="tiberio-tfstate"
+    [[ -n "$bucket" ]] || bucket="tiberio-tfstate-v2"
     [[ -n "$region" ]] || region="eu-west-1"
 
     local hcl_file="$TERRAFORM_DIR/backend.prod.hcl"

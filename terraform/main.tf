@@ -65,3 +65,17 @@ module "lambda_url_oauth" {
   beacon_bucket_name = module.s3_beacon.bucket_name
   beacon_object_key  = module.s3_beacon.beacon_object_key
 }
+
+# GitHub Actions OIDC deploy role (used by .github/workflows/deploy-lambda.yml).
+module "github_oidc" {
+  source = "./modules/github_oidc"
+
+  name_prefix          = var.name_prefix
+  lambda_function_arns = [module.lambda_directive.function_arn, module.lambda_url_oauth.function_arn]
+  subject_claims = [
+    "repo:${var.github_repository}:ref:refs/tags/v*",
+    "repo:${var.github_repository}:ref:refs/heads/main",
+  ]
+  create_oidc_provider       = var.create_github_oidc_provider
+  existing_oidc_provider_arn = var.existing_github_oidc_provider_arn
+}

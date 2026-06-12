@@ -9,6 +9,7 @@ includes:
     vars:
       PROJECT: "{{.PROJECT}}"
   release: ./taskfiles/Taskfile.release.yml
+  deploy: ./taskfiles/Taskfile.deploy.yml
   docs:
     taskfile: ./taskfiles/Taskfile.docs.yml
     dir: .
@@ -82,4 +83,8 @@ tasks:
 
   run:
     desc: Run the FastAPI server (development mode)
-    cmd: uv run uvicorn tiberio.api.app:create_app --reload --factory --host 0.0.0.0 --port 8080
+    cmd: uv run uvicorn tiberio.api.app:create_app --reload --factory --host 0.0.0.0 --port 3040
+
+  tunnel:
+    desc: Start the ngrok tunnel and publish the beacon with its public URL
+    cmd: ./scripts/start-ngrok-beacon.sh

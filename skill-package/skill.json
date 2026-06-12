@@ -24,7 +24,9 @@
         }
       },
       "isAvailableWorldwide": false,
-      "distributionCountries": ["DE"],
+      "distributionCountries": [
+        "DE"
+      ],
       "testingInstructions": "Single-Household-Skill (Entwicklungsmodus). Account Linking gegen den eigenen Heimserver (OAuth2 Authorization Code + PKCE), danach Geräteerkennung und Sprachbefehle laut docs/skill-setup.md.",
       "category": "SMART_HOME"
     },
@@ -53,7 +55,7 @@
       "locales": {
         "de-DE": {
           "privacyPolicyUrl": "https://github.com/jenreh/tiberio/blob/main/docs/datenschutz.md",
-          "termsOfUseUrl": ""
+          "termsOfUseUrl": "https://github.com/jenreh/tiberio/blob/main/docs/datenschutz.md"
         }
       }
     }

@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from functools import lru_cache
 from pathlib import Path
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import SecretStr, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 # Resolved at import time so the default is CWD-independent.
 # tiberio/config/settings.py → tiberio/config → tiberio → project root
@@ -21,11 +21,14 @@ class Settings(BaseSettings):
         env_prefix="TIBERIO_",
         env_nested_delimiter="__",
         case_sensitive=False,
+        env_file=_PROJECT_ROOT / ".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
     )
 
     # Server
     host: str = "0.0.0.0"  # noqa: S104
-    port: int = 8080
+    port: int = 3040
     debug: bool = False
 
     devices_config_path: Path = _PROJECT_ROOT / "config" / "devices.yaml"
@@ -41,8 +44,8 @@ class Settings(BaseSettings):
         return value.upper() if isinstance(value, str) else value
 
     # AWS / S3 beacon
-    aws_region: str = "eu-central-1"
-    s3_beacon_bucket: str = "tiberio-beacon"
+    aws_region: str = "eu-west-1"
+    s3_beacon_bucket: str = "tiberio-beacon-v2"
     s3_beacon_key: str = "endpoint.json"
     public_base_url: str = ""  # current tunnel URL announced via the beacon
     beacon_enabled: bool = False
@@ -70,7 +73,15 @@ class Settings(BaseSettings):
     # OAuth — set DEV_MODE=true to skip redirect_uri allowlist checks locally.
     # In production both settings must be provided; omitting them blocks all auth requests.
     dev_mode: bool = False
-    oauth_allowed_redirect_uris: list[str] = []
+    oauth_allowed_redirect_uris: Annotated[list[str], NoDecode] = []
+
+    @field_validator("oauth_allowed_redirect_uris", mode="before")
+    @classmethod
+    def _split_redirect_uris(cls, value: object) -> object:
+        """Accept a comma-separated string from env; JSON lists pass through."""
+        if isinstance(value, str):
+            return [uri.strip() for uri in value.split(",") if uri.strip()]
+        return value
 
 
 @lru_cache
