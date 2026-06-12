@@ -14,12 +14,12 @@ from pydantic import SecretStr
 
 from tests.interfaces.alexa.conftest import DEVICES_YAML, directive, discovery_directive
 
-from pantau.adapters.auth_code_store import AuthCodeStore
-from pantau.adapters.jwt_service import JwtService
-from pantau.adapters.sqlite_user_store import SqliteUserStore
-from pantau.api.app import create_app
-from pantau.composition import build_oauth_test_container
-from pantau.config.settings import Settings
+from tiberio.adapters.auth_code_store import AuthCodeStore
+from tiberio.adapters.jwt_service import JwtService
+from tiberio.adapters.sqlite_user_store import SqliteUserStore
+from tiberio.api.app import create_app
+from tiberio.composition import build_oauth_test_container
+from tiberio.config.settings import Settings
 
 
 @pytest.fixture
@@ -201,8 +201,8 @@ class TestDirectiveHmacVerification:
             content=raw,
             headers={
                 "Content-Type": "application/json",
-                "X-Pantau-Timestamp": str(ts),
-                "X-Pantau-Signature": sig,
+                "X-Tiberio-Timestamp": str(ts),
+                "X-Tiberio-Signature": sig,
             },
         )
 

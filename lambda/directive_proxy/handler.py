@@ -5,10 +5,10 @@ from the S3 beacon (conditional GET, ETag cached in the warm container) and
 forwards the directive JSON unchanged to ``{base_url}/alexa/directive``.
 
 The request carries the timestamped HMAC-SHA256 headers the home server
-verifies (see ``pantau/interfaces/alexa/directive_router.py``):
-``X-Pantau-Timestamp`` (unix seconds) and ``X-Pantau-Signature`` over
+verifies (see ``tiberio/interfaces/alexa/directive_router.py``):
+``X-Tiberio-Timestamp`` (unix seconds) and ``X-Tiberio-Signature`` over
 ``f"{timestamp}." + raw_body``. The shared secret comes from the
-``PANTAU_SHARED_SECRET`` env var or — if ``PANTAU_SHARED_SECRET_SSM_PARAM``
+``TIBERIO_SHARED_SECRET`` env var or — if ``TIBERIO_SHARED_SECRET_SSM_PARAM``
 is set — from SSM Parameter Store (decrypted, cached in the warm container).
 
 On S3 or connection-level home-server failures a valid Alexa
@@ -91,8 +91,8 @@ def _build_headers(body: bytes) -> dict[str, str]:
     signature = hmac.new(
         secret.encode(), f"{timestamp}.".encode() + body, hashlib.sha256
     ).hexdigest()
-    headers["X-Pantau-Timestamp"] = str(timestamp)
-    headers["X-Pantau-Signature"] = signature
+    headers["X-Tiberio-Timestamp"] = str(timestamp)
+    headers["X-Tiberio-Signature"] = signature
     return headers
 
 
@@ -104,14 +104,14 @@ def _get_shared_secret() -> str:
 
 
 def _load_shared_secret() -> str:
-    ssm_param = os.environ.get("PANTAU_SHARED_SECRET_SSM_PARAM")
+    ssm_param = os.environ.get("TIBERIO_SHARED_SECRET_SSM_PARAM")
     if ssm_param:
         log.info("Loading shared secret from SSM Parameter Store")
         response = boto3.client("ssm").get_parameter(
             Name=ssm_param, WithDecryption=True
         )
         return str(response["Parameter"]["Value"])
-    return os.environ.get("PANTAU_SHARED_SECRET", "")
+    return os.environ.get("TIBERIO_SHARED_SECRET", "")
 
 
 def _bridge_unreachable(event: dict[str, Any], message: str) -> dict[str, Any]:

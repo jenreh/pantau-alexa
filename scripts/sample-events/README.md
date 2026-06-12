@@ -15,14 +15,14 @@ home server's `POST /alexa/directive`.
 
 Replace `REPLACE_WITH_ACCESS_TOKEN` with a real access token from the OAuth
 token endpoint (or any value when the home server runs with
-`PANTAU_DEV_MODE=true`). Endpoint IDs match the example
+`TIBERIO_DEV_MODE=true`). Endpoint IDs match the example
 `config/devices.yaml` — adjust to your device config.
 
 ## Invoke the deployed Lambda
 
 ```bash
 aws lambda invoke \
-  --function-name pantau-alexa-directive-proxy \
+  --function-name tiberio-directive-proxy \
   --cli-binary-format raw-in-base64-out \
   --payload file://scripts/sample-events/discovery.json \
   /dev/stdout

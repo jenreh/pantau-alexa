@@ -41,9 +41,9 @@ resource "aws_lambda_function" "this" {
 
   environment {
     variables = {
-      PANTAU_BEACON_BUCKET           = var.beacon_bucket_name
-      PANTAU_BEACON_KEY              = var.beacon_object_key
-      PANTAU_SHARED_SECRET_SSM_PARAM = var.shared_secret_ssm_param
+      TIBERIO_BEACON_BUCKET           = var.beacon_bucket_name
+      TIBERIO_BEACON_KEY              = var.beacon_object_key
+      TIBERIO_SHARED_SECRET_SSM_PARAM = var.shared_secret_ssm_param
     }
   }
 

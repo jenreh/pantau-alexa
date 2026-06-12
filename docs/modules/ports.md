@@ -1,6 +1,6 @@
 # ports/
 
-**Location:** `pantau/ports/`  
+**Location:** `tiberio/ports/`  
 **Rule:** No imports from `adapters/`. Ports define *what* is needed; adapters define *how* it's done.
 
 Ports are abstract contracts — Python `Protocol` classes that define the interface between use-cases and infrastructure. They're the plugs in the wall: your business logic plugs into ports, and adapters plug into the other side.

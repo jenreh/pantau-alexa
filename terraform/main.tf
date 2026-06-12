@@ -1,4 +1,4 @@
-# Pantau AWS edge (KONZEPT section 9): S3 beacon, least-privilege IAM,
+# Tiberio AWS edge (KONZEPT section 9): S3 beacon, least-privilege IAM,
 # directive proxy Lambda and OAuth proxy behind an HTTP API.
 
 provider "aws" {

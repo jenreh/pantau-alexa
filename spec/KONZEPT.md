@@ -1,4 +1,4 @@
-# Konzept & Implementierungsplan: Heimautomatisierung mit Alexa (`pantau-alexa`)
+# Konzept & Implementierungsplan: Heimautomatisierung mit Alexa (`Tiberio`)
 
 > Stand: 2026-06-09 · Stack: Python 3.14 · FastAPI · AWS (Terraform) · Alexa Smart-Home-Skill
 
@@ -169,7 +169,7 @@ thermostats:                          # fritzctl (set_temperature)
 Hexagonale Schichtung (Ports & Adapters), strikte Abhängigkeitsrichtung nach innen (DIP):
 
 ```
-pantau/
+tiberio/
 ├── domain/                # reine Domäne, keine I/O (Orange/Yellow)
 │   ├── models.py          # Device, Channel, Thermostat, Blind, TvAudio
 │   └── values.py          # Temperature, Percentage, MuteState (Value Objects, invariantengeschützt)
@@ -229,11 +229,12 @@ Die Signaturen stammen aus dem **lokalen Quellcode** der Schwesterprojekte
 
 ```python
 from harmonyhub import HarmonyHubClient
+
 async with HarmonyHubClient(host, connection_mode="persistent") as hub:
-    status = await hub.get_current_activity()          # aktive Aktivität prüfen
-    await hub.start_activity("Fernseher")              # TV-Aktivität starten
-    await hub.set_channel("2")                          # ChannelResult (digits_then_enter)
-    await hub.send_key("mute")                          # ⚠ TOGGLE (kein diskretes on/off)
+    status = await hub.get_current_activity()  # aktive Aktivität prüfen
+    await hub.start_activity("Fernseher")  # TV-Aktivität starten
+    await hub.set_channel("2")  # ChannelResult (digits_then_enter)
+    await hub.send_key("mute")  # ⚠ TOGGLE (kein diskretes on/off)
 ```
 
 > **Caveat**: `mute` ist nur ein Toggle → Server hält Assumed-State; Drift möglich, wenn
@@ -243,10 +244,11 @@ async with HarmonyHubClient(host, connection_mode="persistent") as hub:
 
 ```python
 from fritzctl.avm.clients import fritz_client_context
+
 async with fritz_client_context() as client:
-    devices = await client.list_devices()              # list[Thermostat] (id=AIN, name, …)
+    devices = await client.list_devices()  # list[Thermostat] (id=AIN, name, …)
     ain = next(d.id for d in devices if d.name == "Wohnzimmer")
-    await client.set_temperature(ain, 22.0)            # 8–28 °C, rundet 0,5 °C, Safety-Engine
+    await client.set_temperature(ain, 22.0)  # 8–28 °C, rundet 0,5 °C, Safety-Engine
 ```
 
 > Name→AIN-Auflösung macht der Adapter (Client matcht per AIN). `fritzctl` bringt eine
@@ -256,9 +258,12 @@ async with fritz_client_context() as client:
 
 ```python
 from homekit import HomeKitClient, load_config
+
 async with HomeKitClient(load_config()) as client:
-    await client.set_position("cover.kueche", 50)      # 0–100 %  (CharacteristicWriteResult)
-    state = await client.get_state("cover.kueche")     # aktuelle Position
+    await client.set_position(
+        "cover.kueche", 50
+    )  # 0–100 %  (CharacteristicWriteResult)
+    state = await client.get_state("cover.kueche")  # aktuelle Position
 ```
 
 > Entities/Aliase in `entities.toml` der homekit-Bibliothek; im Device-Registry referenziert.
@@ -272,7 +277,7 @@ Alexa `ENDPOINT_UNREACHABLE`).
 ## 8. OAuth2 / Account Linking (Heimserver als IdP, via AWS gefrontet)
 
 - FastAPI implementiert einen **OAuth2 Authorization Server**: `Authorization Code Grant
-  + PKCE` (von Alexa unterstützt), eigene **Benutzerverwaltung** (Single-Household,
+  - PKCE` (von Alexa unterstützt), eigene **Benutzerverwaltung** (Single-Household,
   wenige Nutzer; Passwort-Hash via `argon2`/`bcrypt`, Speicherung in SQLite/`aiosqlite`).
 - Endpunkte: `/oauth/authorize` (Login-Seite + Consent + Code), `/oauth/token`
   (Access/Refresh), `/oauth/jwks` optional. Access-Token als signiertes JWT (kurzlebig),
@@ -283,7 +288,7 @@ Alexa `ENDPOINT_UNREACHABLE`).
 - Jede Smart-Home-Directive trägt das Bearer-Token; der Heimserver validiert es
   (Signatur, Ablauf, Scope) in einer Middleware (`TokenValidator`-Port).
 - **4,5-s-Grenze** des Token-Endpoints: Proxy + conditional S3-GET + persistenter Tunnel
-  + (optional) Provisioned Concurrency halten die Latenz niedrig.
+  - (optional) Provisioned Concurrency halten die Latenz niedrig.
 
 ---
 
@@ -297,7 +302,7 @@ Alexa `ENDPOINT_UNREACHABLE`).
   als Default-Endpoint hinterlegt.
 - **OAuth-Proxy** (`API Gateway HTTP API` + Lambda): Catch-all-Route für `/oauth/*`,
   transparente Weiterleitung (inkl. Cookies/302) an den Heimserver.
-- **S3-Bucket** (`pantau-alexa-beacon`): Objekt `endpoint.json`
+- **S3-Bucket** (`tiberio-beacon`): Objekt `endpoint.json`
   `{ "base_url": "...", "updated_at": "...", "health": "ok" }`; **versioniert**,
   **SSE-verschlüsselt**, Bucket-Policy least-privilege.
 - **IAM**: Lambda-Rolle `s3:GetObject` (nur dieses Objekt); Heimserver-IAM-User
@@ -347,34 +352,41 @@ Module: `s3_beacon`, `iam`, `lambda_directive`, `apigw_oauth`; Outputs u. a. die
 > Jede Phase ist eigenständig lauffähig/testbar und liefert einen demonstrierbaren Stand.
 
 **Phase 0 — Projekt-Setup & Skeleton**
+
 - `uv`-Projekt, `Taskfile.dist.yml`, `ruff`/`mypy`, `pydantic-settings`, CI.
 - FastAPI-App mit `/health`; leeres Device-Registry-Schema; Mock-/Echo-Adapter.
 
 **Phase 1 — Domäne, Device-Registry & Use-Cases (ohne Hardware)**
+
 - Domänenmodell + Value Objects; Ports; `yaml_device_registry`.
 - Use-Cases (`set_thermostat_temperature`, `set_blind_position`, `activate_channel`,
   `set_tv_mute`, `discover_devices`) gegen **Fake-Adapter**; Unit-Tests ≥ 80 %.
 
 **Phase 2 — Reale Geräte-Adapter**
+
 - `harmony_tv_adapter`, `fritz_thermostat_adapter`, `homekit_blind_adapter`.
 - Integrationstests (gemockte Hubs: `pytest-httpserver` für FRITZ, Fakes für Harmony/
   HomeKit); Fehler-Mapping; Connection-Management.
 
 **Phase 3 — Alexa Smart-Home-Integration (Directive-Layer)**
+
 - `/alexa/directive`: Parsing, `router`, Capability-Handler
   (Power, Speaker, Thermostat, Range, **Discovery**); Response-Builder.
 - Contract-Tests mit Beispiel-Directive-JSON → Response-Shape.
 
 **Phase 4 — OAuth2 / Account Linking (IdP)**
+
 - Authorization Server (`authorize`/`token`, PKCE), Login-Seite, Nutzer-Store,
   Token-Validierungs-Middleware; Flow-Tests.
 
 **Phase 5 — AWS-Edge: Lambda-Proxy + S3-Beacon + Terraform**
+
 - Directive-Lambda (conditional S3-GET + Forwarding), OAuth-Proxy (API Gateway),
   S3-Beacon-Bucket, IAM, Shared-Secret; **Beacon-Updater** im Heimserver.
 - Terraform-Module + Outputs; `sam local`/Test-Events.
 
 **Phase 6 — Skill-Konfiguration & E2E-Härtung**
+
 - Skill-Manifest, Account-Linking-Konfig, Discovery; strukturierte Logs/Observability;
   Security-Härtung; E2E mit echter Alexa und realer Hardware.
 
@@ -389,7 +401,7 @@ Module: `s3_beacon`, `iam`, `lambda_directive`, `apigw_oauth`; Outputs u. a. die
 - **Lokal E2E**: FastAPI starten, Beispiel-Directives an `/alexa/directive` mit Test-Token
   POSTen; Orchestrierung über Fakes, dann gegen reale Geräte.
 - **AWS**: `terraform plan/apply` in Sandbox; Lambda mit Sample-Event; S3-conditional-GET
-  + Forwarding; Beacon-Updater schreibt Objekt.
+  - Forwarding; Beacon-Updater schreibt Objekt.
 - **Abschluss**: Skill in Alexa-App aktivieren, Account-Linking, „Alexa, Geräte suchen",
   dann die realen Befehle.
 

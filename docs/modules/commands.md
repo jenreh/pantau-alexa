@@ -1,6 +1,6 @@
 # commands/
 
-**Location:** `pantau/commands/`  
+**Location:** `tiberio/commands/`  
 **Rule:** One class per use-case. Depends only on `ports/` and `domain/`. No imports from `adapters/` or `interfaces/`.
 
 Commands (also called *use-cases*) are the application's business logic. Each command does exactly one thing and is named after that thing. This makes the codebase navigable: if you want to know how volume adjustment works, open `commands/adjust_volume.py`.

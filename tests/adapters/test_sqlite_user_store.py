@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from pantau.adapters.sqlite_user_store import SqliteUserStore
+from tiberio.adapters.sqlite_user_store import SqliteUserStore
 
 
 @pytest.fixture

@@ -9,13 +9,13 @@ from collections.abc import Iterator
 
 import pytest
 
-from pantau.api.logging_setup import (
+from tiberio.api.logging_setup import (
     JsonFormatter,
     RequestIdFilter,
     configure_logging,
     request_id_var,
 )
-from pantau.config.settings import Settings
+from tiberio.config.settings import Settings
 
 
 def _make_record(
@@ -83,11 +83,11 @@ class TestJsonFormatter:
 
 
 class TestConfigureLogging:
-    def _pantau_handlers(self) -> list[logging.Handler]:
+    def _tiberio_handlers(self) -> list[logging.Handler]:
         return [
             h
             for h in logging.getLogger().handlers
-            if getattr(h, "_pantau_handler", False)
+            if getattr(h, "_tiberio_handler", False)
         ]
 
     def test_sets_level_from_settings(self) -> None:
@@ -96,27 +96,27 @@ class TestConfigureLogging:
 
     def test_plain_formatter_by_default(self) -> None:
         configure_logging(Settings())
-        (handler,) = self._pantau_handlers()
+        (handler,) = self._tiberio_handlers()
         assert not isinstance(handler.formatter, JsonFormatter)
 
     def test_json_flag_enables_json_formatter(self) -> None:
         configure_logging(Settings(log_json=True))
-        (handler,) = self._pantau_handlers()
+        (handler,) = self._tiberio_handlers()
         assert isinstance(handler.formatter, JsonFormatter)
 
     def test_idempotent_no_duplicate_handlers(self) -> None:
         configure_logging(Settings())
         configure_logging(Settings())
-        assert len(self._pantau_handlers()) == 1
+        assert len(self._tiberio_handlers()) == 1
 
     def test_handler_has_request_id_filter(self) -> None:
         configure_logging(Settings())
-        (handler,) = self._pantau_handlers()
+        (handler,) = self._tiberio_handlers()
         assert any(isinstance(f, RequestIdFilter) for f in handler.filters)
 
     def test_plain_format_renders_request_id(self) -> None:
         configure_logging(Settings())
-        (handler,) = self._pantau_handlers()
+        (handler,) = self._tiberio_handlers()
         token = request_id_var.set("req-fmt-1")
         try:
             record = _make_record()

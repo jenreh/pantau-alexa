@@ -1,6 +1,6 @@
 # interfaces/oauth/
 
-**Location:** `pantau/interfaces/oauth/router.py`  
+**Location:** `tiberio/interfaces/oauth/router.py`  
 **Rule:** All user-controlled input is HTML-escaped. OAuth errors follow RFC 6749 format. No secret values in logs.
 
 The OAuth interface implements a minimal **Authorization Code Grant with PKCE** — just enough to satisfy Alexa's Account Linking requirements. It is self-contained in a single file.
@@ -31,7 +31,7 @@ Shows the HTML login form. Alexa (or its OAuth browser) redirects to this URL at
 - `state` — CSRF token from Alexa
 - `response_type` — always `code`
 
-The handler validates that `redirect_uri` is in the `PANTAU_OAUTH_ALLOWED_REDIRECT_URIS` allowlist. With an empty allowlist the behavior is fail-closed: in dev mode (`PANTAU_DEV_MODE`) any URI is accepted with a warning log; otherwise the endpoint returns 503 (OAuth not configured).
+The handler validates that `redirect_uri` is in the `TIBERIO_OAUTH_ALLOWED_REDIRECT_URIS` allowlist. With an empty allowlist the behavior is fail-closed: in dev mode (`TIBERIO_DEV_MODE`) any URI is accepted with a warning log; otherwise the endpoint returns 503 (OAuth not configured).
 
 All query parameters are embedded as hidden form fields, then HTML-escaped before rendering to prevent XSS.
 
@@ -165,7 +165,7 @@ def _verify_pkce(code_verifier: str, code_challenge: str, method: str) -> bool:
 
 ## Rate limiting
 
-**File:** `pantau/interfaces/rate_limit.py`
+**File:** `tiberio/interfaces/rate_limit.py`
 
 `SlidingWindowRateLimiter` is an in-memory sliding-window limiter ("at most *max_attempts* events per *window_seconds* per key"). Three instances are created on `app.state` at startup:
 
@@ -209,7 +209,7 @@ All errors follow RFC 6749 format:
 | Code theft across clients | `client_id` and `redirect_uri` bound to the code and re-verified at exchange |
 | PKCE downgrade | Only `S256` accepted; `plain` rejected at authorize and verification |
 | PKCE bypass | SHA-256 hash comparison using `secrets.compare_digest` |
-| Redirect URI hijacking | `PANTAU_OAUTH_ALLOWED_REDIRECT_URIS` allowlist (fail-closed outside dev mode) |
+| Redirect URI hijacking | `TIBERIO_OAUTH_ALLOWED_REDIRECT_URIS` allowlist (fail-closed outside dev mode) |
 | XSS in login form | All user-controlled values HTML-escaped before rendering |
 | Stolen refresh token | Token rotation (single-use, atomic pop); stored SHA-256-hashed |
 | Token endpoint abuse | Per-IP rate limit, HTTP 429 |

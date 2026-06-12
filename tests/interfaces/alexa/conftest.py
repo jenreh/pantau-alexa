@@ -7,9 +7,9 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from pantau.api.app import create_app
-from pantau.composition import build_test_container
-from pantau.config.settings import Settings
+from tiberio.api.app import create_app
+from tiberio.composition import build_test_container
+from tiberio.config.settings import Settings
 
 DEVICES_YAML = """
 tv:

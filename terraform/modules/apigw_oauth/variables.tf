@@ -1,13 +1,13 @@
 variable "api_name" {
   description = "Name of the OAuth proxy HTTP API."
   type        = string
-  default     = "pantau-alexa-oauth"
+  default     = "tiberio-oauth"
 }
 
 variable "function_name" {
   description = "Name of the OAuth proxy Lambda function."
   type        = string
-  default     = "pantau-alexa-oauth-proxy"
+  default     = "tiberio-oauth-proxy"
 }
 
 variable "source_dir" {
@@ -54,12 +54,12 @@ variable "role_arn" {
 }
 
 variable "beacon_bucket_name" {
-  description = "Beacon bucket name (PANTAU_BEACON_BUCKET)."
+  description = "Beacon bucket name (TIBERIO_BEACON_BUCKET)."
   type        = string
 }
 
 variable "beacon_object_key" {
-  description = "Beacon object key (PANTAU_BEACON_KEY)."
+  description = "Beacon object key (TIBERIO_BEACON_KEY)."
   type        = string
 }
 

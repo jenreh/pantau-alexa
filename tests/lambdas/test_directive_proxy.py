@@ -73,8 +73,8 @@ def _verify_hmac_like_server(
     request: urllib.request.Request, secret: str, tolerance_seconds: int = 300
 ) -> None:
     """Re-implements the verification from interfaces/alexa/directive_router."""
-    timestamp_header = request.get_header("X-pantau-timestamp")
-    signature = request.get_header("X-pantau-signature")
+    timestamp_header = request.get_header("X-tiberio-timestamp")
+    signature = request.get_header("X-tiberio-signature")
     assert timestamp_header, "Missing HMAC timestamp header"
     assert signature, "Missing HMAC signature header"
     timestamp = int(timestamp_header)
@@ -95,7 +95,7 @@ class TestDirectiveForwarding:
         captured_requests: list[urllib.request.Request],
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        monkeypatch.setenv("PANTAU_SHARED_SECRET", SECRET)
+        monkeypatch.setenv("TIBERIO_SHARED_SECRET", SECRET)
         event = _directive_event()
 
         result = directive_handler.handler(event, None)
@@ -117,8 +117,8 @@ class TestDirectiveForwarding:
         directive_handler.handler(_directive_event(), None)
 
         request = captured_requests[0]
-        assert request.get_header("X-pantau-timestamp") is None
-        assert request.get_header("X-pantau-signature") is None
+        assert request.get_header("X-tiberio-timestamp") is None
+        assert request.get_header("X-tiberio-signature") is None
 
     def test_etag_cache_uses_conditional_get(
         self,
@@ -142,15 +142,15 @@ class TestDirectiveForwarding:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """Round-trip: headers built by the Lambda must pass the actual
-        verifier in pantau.interfaces.alexa.directive_router — pins both
+        verifier in tiberio.interfaces.alexa.directive_router — pins both
         canonicalization schemes against silent drift."""
         from types import SimpleNamespace  # noqa: PLC0415
 
-        from pantau.interfaces.alexa.directive_router import (  # noqa: PLC0415
+        from tiberio.interfaces.alexa.directive_router import (  # noqa: PLC0415
             _require_valid_hmac,
         )
 
-        monkeypatch.setenv("PANTAU_SHARED_SECRET", SECRET)
+        monkeypatch.setenv("TIBERIO_SHARED_SECRET", SECRET)
         body = json.dumps(_directive_event()).encode("utf-8")
 
         headers = directive_handler._build_headers(body)
@@ -196,14 +196,14 @@ class TestDirectiveForwarding:
                 ssm_calls.append(kwargs)
                 return {"Parameter": {"Value": "ssm-secret"}}
 
-        monkeypatch.setenv("PANTAU_SHARED_SECRET_SSM_PARAM", "/pantau/secret")
+        monkeypatch.setenv("TIBERIO_SHARED_SECRET_SSM_PARAM", "/tiberio/secret")
         monkeypatch.setattr(directive_handler, "boto3", FakeBoto3(ssm=FakeSSM()))
 
         directive_handler.handler(_directive_event(), None)
         directive_handler.handler(_directive_event(), None)
 
         assert len(ssm_calls) == 1
-        assert ssm_calls[0] == {"Name": "/pantau/secret", "WithDecryption": True}
+        assert ssm_calls[0] == {"Name": "/tiberio/secret", "WithDecryption": True}
         for request in captured_requests:
             _verify_hmac_like_server(request, "ssm-secret")
 

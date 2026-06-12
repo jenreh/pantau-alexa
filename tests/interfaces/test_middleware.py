@@ -9,10 +9,10 @@ import pytest
 from fastapi.testclient import TestClient
 from starlette.types import Receive, Scope, Send
 
-from pantau.api.app import create_app
-from pantau.api.logging_setup import request_id_var
-from pantau.api.middleware import RequestIdMiddleware
-from pantau.config.settings import Settings
+from tiberio.api.app import create_app
+from tiberio.api.logging_setup import request_id_var
+from tiberio.api.middleware import RequestIdMiddleware
+from tiberio.config.settings import Settings
 
 DEVICES_YAML = """
 tv:

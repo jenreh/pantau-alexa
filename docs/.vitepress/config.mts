@@ -9,7 +9,7 @@ const guideSidebar = [
   {
     text: "Guide",
     items: [
-      { text: "What is pantau-alexa?", link: "/guide/" },
+      { text: "What is tiberio?", link: "/guide/" },
       { text: "Getting Started", link: "/guide/getting-started" },
       { text: "Configuration Reference", link: "/guide/configuration" },
       { text: "CLI Reference", link: "/guide/cli" },
@@ -19,14 +19,14 @@ const guideSidebar = [
 ];
 
 export default withMermaid({
-  title: "pantau-alexa",
+  title: "tiberio",
   description:
     "Alexa Smart Home Skill backend — voice-control your TV, blinds & heating from your own server.",
   base,
   lang: "en-US",
 
   themeConfig: {
-    siteTitle: "pantau-alexa",
+    siteTitle: "tiberio",
 
     nav: [
       { text: "Guide", link: "/guide/", activeMatch: "/guide/" },
@@ -76,11 +76,11 @@ export default withMermaid({
     },
 
     socialLinks: [
-      { icon: "github", link: "https://github.com/jenreh/pantau-alexa" },
+      { icon: "github", link: "https://github.com/jenreh/tiberio" },
     ],
 
     footer: {
-      message: "pantau-alexa — self-hosted Alexa Smart Home backend",
+      message: "tiberio — self-hosted Alexa Smart Home backend",
       copyright: "Copyright © 2026",
     },
 

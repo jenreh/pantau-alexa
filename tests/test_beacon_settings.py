@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from pantau.config.settings import Settings
+from tiberio.config.settings import Settings
 
 
 def test_beacon_settings_defaults() -> None:
@@ -15,9 +15,9 @@ def test_beacon_settings_defaults() -> None:
 
 
 def test_beacon_settings_env_overrides(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("PANTAU_PUBLIC_BASE_URL", "https://tunnel.example.com")
-    monkeypatch.setenv("PANTAU_BEACON_ENABLED", "true")
-    monkeypatch.setenv("PANTAU_BEACON_UPDATE_INTERVAL_SECONDS", "60")
+    monkeypatch.setenv("TIBERIO_PUBLIC_BASE_URL", "https://tunnel.example.com")
+    monkeypatch.setenv("TIBERIO_BEACON_ENABLED", "true")
+    monkeypatch.setenv("TIBERIO_BEACON_UPDATE_INTERVAL_SECONDS", "60")
 
     settings = Settings()
 

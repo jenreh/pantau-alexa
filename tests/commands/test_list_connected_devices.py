@@ -2,18 +2,18 @@
 
 from __future__ import annotations
 
-from pantau.adapters.mock_blind_adapter import MockBlindAdapter
-from pantau.adapters.mock_thermostat_adapter import MockThermostatAdapter
-from pantau.adapters.mock_tv_adapter import MockTvAdapter
-from pantau.commands.list_connected_devices import ListConnectedDevicesCommand
-from pantau.composition import Container
-from pantau.domain.models import (
+from tiberio.adapters.mock_blind_adapter import MockBlindAdapter
+from tiberio.adapters.mock_thermostat_adapter import MockThermostatAdapter
+from tiberio.adapters.mock_tv_adapter import MockTvAdapter
+from tiberio.commands.list_connected_devices import ListConnectedDevicesCommand
+from tiberio.composition import Container
+from tiberio.domain.models import (
     Activity,
     HomeDevice,
     HubDevice,
     LiveThermostat,
 )
-from pantau.ports.listable_port import BackendListResult
+from tiberio.ports.listable_port import BackendListResult
 
 
 def _command(

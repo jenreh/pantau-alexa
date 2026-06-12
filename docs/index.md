@@ -2,7 +2,7 @@
 layout: home
 
 hero:
-  name: "pantau-alexa"
+  name: "tiberio"
   text: "Voice-control your home — from your own server"
   tagline: "Alexa Smart Home backend that connects your TV, roller blinds, and heating over a self-hosted FastAPI server. No third-party cloud required for the actual device control."
   actions:

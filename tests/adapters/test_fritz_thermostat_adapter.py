@@ -9,9 +9,9 @@ from fritzctl.avm.clients import AVMClientAbstract
 from fritzctl.domain.models import Battery, Lock
 from fritzctl.domain.models import Thermostat as FritzThermostat
 
-from pantau.adapters.fritz_thermostat_adapter import FritzThermostatAdapter
-from pantau.domain.errors import DeviceNotFoundError, DeviceUnavailableError
-from pantau.domain.models import Thermostat as DomainThermostat
+from tiberio.adapters.fritz_thermostat_adapter import FritzThermostatAdapter
+from tiberio.domain.errors import DeviceNotFoundError, DeviceUnavailableError
+from tiberio.domain.models import Thermostat as DomainThermostat
 
 
 def _make_fritz_thermostat(
@@ -197,8 +197,8 @@ class TestGetTemperature:
 
 class TestCapabilityGuard:
     async def test_non_thermostat_device_raises_capability_error(self) -> None:
-        from pantau.domain.errors import DeviceCapabilityError
-        from pantau.domain.models import TvAudio
+        from tiberio.domain.errors import DeviceCapabilityError
+        from tiberio.domain.models import TvAudio
 
         client = FakeFritzClient([])
         audio = TvAudio(id="tv-audio", name="Fernseher", adapter="harmony")

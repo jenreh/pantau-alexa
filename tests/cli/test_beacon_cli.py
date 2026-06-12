@@ -1,4 +1,4 @@
-"""Tests for the pantau-beacon CLI."""
+"""Tests for the tiberio-beacon CLI."""
 
 from __future__ import annotations
 
@@ -7,10 +7,10 @@ from typing import Any
 import pytest
 from typer.testing import CliRunner
 
-import pantau.cli.beacon as beacon_cli
-from pantau.config.settings import Settings
-from pantau.domain.beacon import Beacon
-from pantau.domain.errors import BeaconPublishError
+import tiberio.cli.beacon as beacon_cli
+from tiberio.config.settings import Settings
+from tiberio.domain.beacon import Beacon
+from tiberio.domain.errors import BeaconPublishError
 
 runner = CliRunner()
 

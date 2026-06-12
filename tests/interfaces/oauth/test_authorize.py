@@ -17,12 +17,12 @@ from tests.interfaces.oauth.conftest import (
     make_pkce_pair,
 )
 
-from pantau.adapters.auth_code_store import AuthCodeStore
-from pantau.adapters.jwt_service import JwtService
-from pantau.adapters.sqlite_user_store import SqliteUserStore
-from pantau.api.app import create_app
-from pantau.composition import build_oauth_test_container
-from pantau.config.settings import Settings
+from tiberio.adapters.auth_code_store import AuthCodeStore
+from tiberio.adapters.jwt_service import JwtService
+from tiberio.adapters.sqlite_user_store import SqliteUserStore
+from tiberio.api.app import create_app
+from tiberio.composition import build_oauth_test_container
+from tiberio.config.settings import Settings
 
 
 class TestAuthorizeGet:

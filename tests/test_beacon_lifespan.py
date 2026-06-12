@@ -9,12 +9,12 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from pantau.adapters.mock_beacon_publisher import MockBeaconPublisher
-from pantau.api.app import _beacon_loop, create_app
-from pantau.application.publish_beacon import BeaconPublisher
-from pantau.composition import build_test_container
-from pantau.config.settings import Settings
-from pantau.domain.beacon import Beacon
+from tiberio.adapters.mock_beacon_publisher import MockBeaconPublisher
+from tiberio.api.app import _beacon_loop, create_app
+from tiberio.application.publish_beacon import BeaconPublisher
+from tiberio.composition import build_test_container
+from tiberio.config.settings import Settings
+from tiberio.domain.beacon import Beacon
 
 DEVICES_YAML = """
 tv:

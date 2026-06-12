@@ -1,7 +1,7 @@
 variable "bucket_name" {
   description = "Globally unique name of the beacon S3 bucket."
   type        = string
-  default     = "pantau-alexa-beacon"
+  default     = "tiberio-beacon"
 }
 
 variable "beacon_object_key" {

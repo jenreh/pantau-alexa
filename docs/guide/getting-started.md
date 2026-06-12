@@ -17,8 +17,8 @@ You also need at least one physical device (Harmony Hub, FRITZ!Box, or HomeKit a
 
 ```bash
 # Clone the repository
-git clone https://github.com/jenreh/pantau-alexa
-cd pantau-alexa
+git clone https://github.com/jenreh/tiberio
+cd tiberio
 
 # Install Python dependencies (uv creates the venv automatically)
 uv sync
@@ -73,14 +73,14 @@ python -c "import secrets; print(secrets.token_hex(32))"
 The OAuth2 login form requires at least one user in the SQLite database:
 
 ```bash
-uv run pantau users create --username alice
+uv run tiberio users create --username alice
 # You will be prompted for a password
 ```
 
 ## Start the server
 
 ```bash
-uv run pantau
+uv run tiberio
 ```
 
 The server starts on `http://0.0.0.0:8080` by default. Verify it is healthy:

@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import pytest
 
-from pantau.adapters.mock_tv_adapter import MockTvAdapter
-from pantau.adapters.yaml_device_registry import YamlDeviceRegistry
-from pantau.commands.set_mute import SetMuteCommand
-from pantau.commands.turn_off import TurnOffCommand
-from pantau.commands.turn_on import TurnOnCommand
-from pantau.composition import Container
-from pantau.domain.errors import DeviceNotFoundError
-from pantau.domain.models import TvChannel
+from tiberio.adapters.mock_tv_adapter import MockTvAdapter
+from tiberio.adapters.yaml_device_registry import YamlDeviceRegistry
+from tiberio.commands.set_mute import SetMuteCommand
+from tiberio.commands.turn_off import TurnOffCommand
+from tiberio.commands.turn_on import TurnOnCommand
+from tiberio.composition import Container
+from tiberio.domain.errors import DeviceNotFoundError
+from tiberio.domain.models import TvChannel
 
 
 def _container(adapter: MockTvAdapter, registry: YamlDeviceRegistry) -> Container:

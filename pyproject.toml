@@ -1,5 +1,5 @@
 [project]
-name = "pantau-alexa"
+name = "tiberio"
 version = "0.1.0"
 description = "Alexa Smart Home Skill for home automation (TV, blinds, thermostats) via a self-hosted FastAPI server."
 readme = "README.md"
@@ -53,21 +53,21 @@ dev = [
 ]
 
 [project.scripts]
-pantau = "pantau.api.app:main"
-pantau-users = "pantau.cli.users:main"
-pantau-beacon = "pantau.cli.beacon:main"
-pantau-setup = "pantau.cli.setup:main"
+tiberio = "tiberio.api.app:main"
+tiberio-users = "tiberio.cli.users:main"
+tiberio-beacon = "tiberio.cli.beacon:main"
+tiberio-setup = "tiberio.cli.setup:main"
 
 [project.urls]
-Homepage = "https://github.com/jenreh/pantau-alexa"
-Repository = "https://github.com/jenreh/pantau-alexa"
+Homepage = "https://github.com/jenreh/tiberio"
+Repository = "https://github.com/jenreh/tiberio"
 
 [tool.hatch.build.targets.wheel]
-packages = ["pantau"]
+packages = ["tiberio"]
 
 [tool.hatch.build.targets.sdist]
 include = [
-    "/pantau",
+    "/tiberio",
     "/config",
     "README.md",
     "pyproject.toml",
@@ -224,7 +224,7 @@ docstring-code-line-length = "dynamic"
 exclude = ["*.pyi"]
 
 [tool.ruff.lint.isort]
-known-local-folder = ["pantau"]
+known-local-folder = ["tiberio"]
 
 [tool.pytest.ini_options]
 cache_dir = ".cache/pytest"
@@ -264,9 +264,9 @@ ignore_missing_imports = true
 
 [tool.coverage.run]
 branch = true
-source = ["pantau"]
+source = ["tiberio"]
 omit = [
-    "pantau/ports/*", # Protocol stubs — interface definitions only
+    "tiberio/ports/*", # Protocol stubs — interface definitions only
 ]
 
 [tool.coverage.report]

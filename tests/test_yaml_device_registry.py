@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from pantau.adapters.yaml_device_registry import YamlDeviceRegistry
-from pantau.domain.models import Thermostat, TvChannel, WindowBlind
+from tiberio.adapters.yaml_device_registry import YamlDeviceRegistry
+from tiberio.domain.models import Thermostat, TvChannel, WindowBlind
 
 
 @pytest.fixture

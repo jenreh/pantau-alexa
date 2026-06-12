@@ -10,7 +10,7 @@ variable "state_bucket_name" {
     for the main (phase 2) configuration.
   EOT
   type        = string
-  default     = "pantau-alexa-tfstate"
+  default     = "tiberio-tfstate"
 }
 
 variable "state_key" {

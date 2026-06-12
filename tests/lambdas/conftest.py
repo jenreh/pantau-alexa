@@ -111,10 +111,10 @@ def oauth_handler(oauth_module: ModuleType) -> Any:
 
 @pytest.fixture
 def beacon_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("PANTAU_BEACON_BUCKET", "pantau-alexa-beacon")
-    monkeypatch.setenv("PANTAU_BEACON_KEY", "endpoint.json")
-    monkeypatch.delenv("PANTAU_SHARED_SECRET", raising=False)
-    monkeypatch.delenv("PANTAU_SHARED_SECRET_SSM_PARAM", raising=False)
+    monkeypatch.setenv("TIBERIO_BEACON_BUCKET", "tiberio-beacon")
+    monkeypatch.setenv("TIBERIO_BEACON_KEY", "endpoint.json")
+    monkeypatch.delenv("TIBERIO_SHARED_SECRET", raising=False)
+    monkeypatch.delenv("TIBERIO_SHARED_SECRET_SSM_PARAM", raising=False)
 
 
 @pytest.fixture

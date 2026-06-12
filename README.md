@@ -1,4 +1,4 @@
-# pantau-alexa
+# Tiberio
 
 ![Version](https://img.shields.io/badge/version-0.1.0-blue)
 ![Tests](https://img.shields.io/badge/tests-356%20passing-brightgreen)
@@ -7,7 +7,7 @@
 Alexa Smart Home Skill backend for home automation — controls TV (Harmony Hub), roller blinds (HomeKit), and heating thermostats (FRITZ!Box) via a self-hosted FastAPI server.
 
 See [spec/KONZEPT.md](spec/KONZEPT.md) for the full architecture and implementation plan.
-See [Developer Documentation](https://pantau-alexa.readthedocs.io/en/latest/) for the full documentation of the project.
+See [Developer Documentation](https://tiberio.readthedocs.io/en/latest/) for the full documentation of the project.
 
 ## Implementation status
 
@@ -35,9 +35,9 @@ Users are stored in SQLite (`aiosqlite`). Passwords are hashed with `bcrypt`. Ac
 
 ### Security
 
-- **HMAC request signing** — When `PANTAU_SHARED_SECRET` is set, `/alexa/directive` requires `X-Pantau-Timestamp` and `X-Pantau-Signature` headers (HMAC-SHA256, 5-minute replay window).
+- **HMAC request signing** — When `TIBERIO_SHARED_SECRET` is set, `/alexa/directive` requires `X-Tiberio-Timestamp` and `X-Tiberio-Signature` headers (HMAC-SHA256, 5-minute replay window).
 - **Rate limiting** — Sliding-window limiter on login and token endpoints (per client IP / username).
-- **JWT startup validation** — Server refuses to start when `PANTAU_JWT_SECRET` is absent or too short (unless `PANTAU_DEV_MODE=true`).
+- **JWT startup validation** — Server refuses to start when `TIBERIO_JWT_SECRET` is absent or too short (unless `TIBERIO_DEV_MODE=true`).
 
 ## Phase 5 — AWS Edge
 
@@ -56,7 +56,7 @@ Terraform ([terraform/](terraform/)) provisions the stable AWS front for the ski
 ## Architecture
 
 ```text
-pantau/
+tiberio/
 ├── domain/          # Pure models, value objects, and domain errors
 ├── commands/        # Use-cases: one command per device capability
 ├── ports/           # Capability ports + auth/store abstractions (Protocol)
@@ -68,7 +68,7 @@ pantau/
 │   ├── http_auth.py # Bearer-token FastAPI dependency
 │   └── rate_limit.py # Sliding-window rate limiter
 ├── api/             # FastAPI app factory + lifespan
-├── cli/             # pantau-users + pantau-beacon CLIs (Typer)
+├── cli/             # tiberio-users + tiberio-beacon CLIs (Typer)
 ├── config/          # pydantic-settings + devices.yaml loader
 └── composition.py   # Dependency injection root
 ```
@@ -129,19 +129,19 @@ task run
 
 | Variable                             | Description                                    |
 | ------------------------------------ | ---------------------------------------------- |
-| `PANTAU_JWT_SECRET`                  | HS256 signing key (min 32 chars)               |
-| `PANTAU_SHARED_SECRET`               | HMAC key for Lambda→server request signing     |
-| `PANTAU_OAUTH_ALLOWED_REDIRECT_URIS` | Comma-separated allowed OAuth redirect URIs    |
+| `TIBERIO_JWT_SECRET`                  | HS256 signing key (min 32 chars)               |
+| `TIBERIO_SHARED_SECRET`               | HMAC key for Lambda→server request signing     |
+| `TIBERIO_OAUTH_ALLOWED_REDIRECT_URIS` | Comma-separated allowed OAuth redirect URIs    |
 
 See [.env.default](.env.default) for all variables and their defaults.
 
 ### User management CLI
 
 ```bash
-uv run pantau-users add <username>
-uv run pantau-users list
-uv run pantau-users passwd <username>
-uv run pantau-users delete <username>
+uv run tiberio-users add <username>
+uv run tiberio-users list
+uv run tiberio-users passwd <username>
+uv run tiberio-users delete <username>
 ```
 
 ### Beacon CLI
@@ -150,14 +150,14 @@ Publish the current tunnel URL to the S3 beacon on demand (e.g. from a
 cloudflared/ngrok hook when the URL rotates):
 
 ```bash
-uv run pantau-beacon publish --base-url https://your-tunnel.example.com
-# or rely on PANTAU_PUBLIC_BASE_URL / settings:
-uv run pantau-beacon publish
+uv run tiberio-beacon publish --base-url https://your-tunnel.example.com
+# or rely on TIBERIO_PUBLIC_BASE_URL / settings:
+uv run tiberio-beacon publish
 ```
 
 ### Setup CLI
 
-`pantau-setup` automates infrastructure initialisation and Alexa account
+`tiberio-setup` automates infrastructure initialisation and Alexa account
 linking end to end: it generates the home-server secrets, drives the Terraform
 two-phase deploy ([terraform/deploy-aws.sh](terraform/deploy-aws.sh)), renders the
 [skill-package/](skill-package/) templates from the Terraform outputs into
@@ -167,17 +167,17 @@ for the linking step — a configured `ask` CLI (`ask configure`).
 
 ```bash
 # Whole flow (secrets → infra → render → optional user/beacon → link):
-uv run pantau-setup run \
+uv run tiberio-setup run \
   --skill-id amzn1.ask.skill.<your-skill-id> \
   --tfvars terraform/terraform.tfvars \
   --username alice --base-url https://your-tunnel.example.com --yes
 
 # Or run the phases individually:
-uv run pantau-setup check     # verify required tooling
-uv run pantau-setup secrets   # ensure .env has strong JWT/HMAC secrets
-uv run pantau-setup infra     --skill-id <id> --tfvars terraform/terraform.tfvars --yes
-uv run pantau-setup render    # skill-package/build/* from terraform outputs
-uv run pantau-setup link      --skill-id <id>
+uv run tiberio-setup check     # verify required tooling
+uv run tiberio-setup secrets   # ensure .env has strong JWT/HMAC secrets
+uv run tiberio-setup infra     --skill-id <id> --tfvars terraform/terraform.tfvars --yes
+uv run tiberio-setup render    # skill-package/build/* from terraform outputs
+uv run tiberio-setup link      --skill-id <id>
 ```
 
 The final "Enable to use + log in" tap in the Alexa app stays manual; `run`

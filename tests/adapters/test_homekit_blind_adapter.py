@@ -8,9 +8,9 @@ import pytest
 from homekit.client import HomeKitClient
 from homekit.exceptions import AccessoryNotFoundError, HomeKitError
 
-from pantau.adapters.homekit_blind_adapter import HomeKitBlindAdapter
-from pantau.domain.errors import DeviceUnavailableError
-from pantau.domain.models import WindowBlind
+from tiberio.adapters.homekit_blind_adapter import HomeKitBlindAdapter
+from tiberio.domain.errors import DeviceUnavailableError
+from tiberio.domain.models import WindowBlind
 
 
 class FakeEntityState:
@@ -245,8 +245,8 @@ class TestGetPositionInternal:
 
 class TestCapabilityGuard:
     async def test_non_blind_device_raises_capability_error(self) -> None:
-        from pantau.domain.errors import DeviceCapabilityError
-        from pantau.domain.models import TvAudio
+        from tiberio.domain.errors import DeviceCapabilityError
+        from tiberio.domain.models import TvAudio
 
         adapter = HomeKitBlindAdapter(client=cast(HomeKitClient, FakeHomeKitClient()))
         audio = TvAudio(id="tv-audio", name="Fernseher", adapter="harmony")

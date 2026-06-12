@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from pantau.domain.values import MuteState, Percentage, Temperature
+from tiberio.domain.values import MuteState, Percentage, Temperature
 
 
 class TestTemperature:

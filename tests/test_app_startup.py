@@ -7,8 +7,8 @@ from pathlib import Path
 import pytest
 from pydantic import SecretStr
 
-from pantau.api.app import create_app
-from pantau.config.settings import Settings
+from tiberio.api.app import create_app
+from tiberio.config.settings import Settings
 
 DEVICES_YAML = """
 tv:
@@ -34,7 +34,7 @@ def devices_config(tmp_path: Path) -> Path:
 
 def test_empty_jwt_secret_without_dev_mode_fails_fast(devices_config: Path) -> None:
     settings = Settings(devices_config_path=devices_config, dev_mode=False)
-    with pytest.raises(RuntimeError, match="PANTAU_JWT_SECRET"):
+    with pytest.raises(RuntimeError, match="TIBERIO_JWT_SECRET"):
         create_app(settings=settings)
 
 
@@ -73,7 +73,7 @@ def test_beacon_enabled_without_public_base_url_fails_fast(
         beacon_enabled=True,
         public_base_url="",
     )
-    with pytest.raises(RuntimeError, match="PANTAU_PUBLIC_BASE_URL"):
+    with pytest.raises(RuntimeError, match="TIBERIO_PUBLIC_BASE_URL"):
         create_app(settings=settings)
 
 
@@ -96,7 +96,7 @@ def test_beacon_with_http_url_in_dev_mode_boots(
 ) -> None:
     # Stub boto3 — an enabled beacon wires the real S3 adapter, and client
     # construction must not touch the host's AWS credential chain in tests.
-    import pantau.adapters.s3_beacon_publisher as s3_module  # noqa: PLC0415
+    import tiberio.adapters.s3_beacon_publisher as s3_module  # noqa: PLC0415
 
     class _FakeBoto3:
         @staticmethod

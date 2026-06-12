@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from pantau.adapters.yaml_device_registry import YamlDeviceRegistry
+from tiberio.adapters.yaml_device_registry import YamlDeviceRegistry
 
 DEVICES_YAML = """
 tv:

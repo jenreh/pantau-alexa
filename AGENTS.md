@@ -123,7 +123,7 @@ Full rules in **python-coding** skill. Key:
 ## 6) Architecture Layers
 
 ```
-pantau/
+tiberio/
 ├── domain/        # Pure domain, no I/O. Models + Value Objects.
 ├── application/   # Use-cases. One class per use-case. Depend only on ports/.
 ├── ports/         # Abstract interfaces (Protocol/ABC). One port per capability.

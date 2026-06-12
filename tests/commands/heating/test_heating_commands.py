@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import pytest
 
-from pantau.adapters.mock_thermostat_adapter import MockThermostatAdapter
-from pantau.adapters.yaml_device_registry import YamlDeviceRegistry
-from pantau.commands.set_temperature import SetTemperatureCommand
-from pantau.composition import Container
-from pantau.domain.errors import DeviceCapabilityError, DeviceNotFoundError
+from tiberio.adapters.mock_thermostat_adapter import MockThermostatAdapter
+from tiberio.adapters.yaml_device_registry import YamlDeviceRegistry
+from tiberio.commands.set_temperature import SetTemperatureCommand
+from tiberio.composition import Container
+from tiberio.domain.errors import DeviceCapabilityError, DeviceNotFoundError
 
 
 def _container(

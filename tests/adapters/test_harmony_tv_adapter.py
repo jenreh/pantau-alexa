@@ -8,9 +8,9 @@ import pytest
 from harmonyhub.exceptions import HubUnavailableError, ProtocolError
 from harmonyhub.models import ActivityStatus, ChannelResult, CommandResult
 
-from pantau.adapters.harmony_tv_adapter import HarmonyTvAdapter
-from pantau.domain.errors import DeviceUnavailableError
-from pantau.domain.models import TvAudio, TvChannel
+from tiberio.adapters.harmony_tv_adapter import HarmonyTvAdapter
+from tiberio.domain.errors import DeviceUnavailableError
+from tiberio.domain.models import TvAudio, TvChannel
 
 
 class FakeHub:

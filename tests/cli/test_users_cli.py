@@ -1,4 +1,4 @@
-"""Tests for the pantau-users CLI."""
+"""Tests for the tiberio-users CLI."""
 
 from __future__ import annotations
 
@@ -8,9 +8,9 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from pantau.adapters.password_hasher import hash_password
-from pantau.adapters.sqlite_user_store import SqliteUserStore
-from pantau.cli.users import app
+from tiberio.adapters.password_hasher import hash_password
+from tiberio.adapters.sqlite_user_store import SqliteUserStore
+from tiberio.cli.users import app
 
 runner = CliRunner()
 

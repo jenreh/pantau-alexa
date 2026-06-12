@@ -10,11 +10,11 @@ from fastapi.testclient import TestClient
 
 from tests.interfaces.alexa.conftest import directive
 
-from pantau.api.app import create_app
-from pantau.composition import build_test_container
-from pantau.config.settings import Settings
+from tiberio.api.app import create_app
+from tiberio.composition import build_test_container
+from tiberio.config.settings import Settings
 
-_LOGGER_NAME = "pantau.interfaces.alexa.directive_router"
+_LOGGER_NAME = "tiberio.interfaces.alexa.directive_router"
 
 
 @pytest.fixture

@@ -7,19 +7,19 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from pantau.adapters.mock_blind_adapter import MockBlindAdapter
-from pantau.adapters.mock_thermostat_adapter import MockThermostatAdapter
-from pantau.adapters.mock_tv_adapter import MockTvAdapter
-from pantau.api.app import create_app
-from pantau.composition import build_test_container
-from pantau.config.settings import Settings
-from pantau.domain.models import (
+from tiberio.adapters.mock_blind_adapter import MockBlindAdapter
+from tiberio.adapters.mock_thermostat_adapter import MockThermostatAdapter
+from tiberio.adapters.mock_tv_adapter import MockTvAdapter
+from tiberio.api.app import create_app
+from tiberio.composition import build_test_container
+from tiberio.config.settings import Settings
+from tiberio.domain.models import (
     Activity,
     HomeDevice,
     HubDevice,
     LiveThermostat,
 )
-from pantau.ports.listable_port import BackendListResult
+from tiberio.ports.listable_port import BackendListResult
 
 DEVICES_YAML = """
 tv:

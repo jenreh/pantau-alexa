@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import pytest
 
-from pantau.adapters.mock_blind_adapter import MockBlindAdapter
-from pantau.adapters.mock_thermostat_adapter import MockThermostatAdapter
-from pantau.adapters.mock_tv_adapter import MockTvAdapter
-from pantau.domain.models import Thermostat as DomainThermostat
-from pantau.domain.models import TvAudio, TvChannel, WindowBlind
+from tiberio.adapters.mock_blind_adapter import MockBlindAdapter
+from tiberio.adapters.mock_thermostat_adapter import MockThermostatAdapter
+from tiberio.adapters.mock_tv_adapter import MockTvAdapter
+from tiberio.domain.models import Thermostat as DomainThermostat
+from tiberio.domain.models import TvAudio, TvChannel, WindowBlind
 
 
 def _channel() -> TvChannel:

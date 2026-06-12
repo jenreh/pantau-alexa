@@ -1,6 +1,6 @@
 # composition.py
 
-**Location:** `pantau/composition.py`  
+**Location:** `tiberio/composition.py`  
 **Role:** The only file that knows both ports *and* adapters. It wires them together at startup.
 
 `composition.py` is the **Composition Root** — the single place where the application's object graph is assembled. This is where "dependency injection" actually happens: adapters are created and registered against their port types, then injected into commands and handlers.

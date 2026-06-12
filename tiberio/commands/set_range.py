@@ -1,0 +1,24 @@
+"""Command: set range value (e.g. blind position) on a device."""
+
+from __future__ import annotations
+
+import logging
+
+from tiberio.commands._base import DeviceCommand
+from tiberio.domain.values import Percentage
+from tiberio.ports.range_port import RangeControllablePort
+
+log = logging.getLogger(__name__)
+
+
+class SetRangeCommand(DeviceCommand):
+    async def execute(self, endpoint_id: str, percent: int) -> None:
+        device, adapter = self._find_and_resolve(endpoint_id, RangeControllablePort)  # type: ignore[type-abstract]
+        Percentage(value=percent)  # validates 0–100; raises ValueError if outside range
+        log.debug(
+            "SetRange: endpoint=%s percent=%d adapter=%s",
+            endpoint_id,
+            percent,
+            device.adapter,
+        )
+        await adapter.set_range(device, percent)

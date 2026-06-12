@@ -1,6 +1,6 @@
 # domain/
 
-**Location:** `pantau/domain/`  
+**Location:** `tiberio/domain/`  
 **Rule:** Zero imports from outside `domain/`. No I/O. No frameworks. Pure Python.
 
 The domain is the heart of the application. It contains the vocabulary of your home automation system: what a TV channel is, what a thermostat is, what temperatures are valid. Everything else in the application depends on the domain — the domain depends on nothing.

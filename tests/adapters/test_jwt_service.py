@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from pantau.adapters.jwt_service import JwtService
-from pantau.ports.token_validator_port import TokenClaims
+from tiberio.adapters.jwt_service import JwtService
+from tiberio.ports.token_validator_port import TokenClaims
 
 TEST_SECRET = "super-secret-test-key"  # noqa: S105
 

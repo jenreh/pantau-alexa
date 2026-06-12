@@ -14,7 +14,7 @@ from tests.lambdas.conftest import FakeS3Client
 
 
 def _reader(body: bytes) -> BeaconReader:
-    return BeaconReader(FakeS3Client(body), "pantau-alexa-beacon", "endpoint.json")
+    return BeaconReader(FakeS3Client(body), "tiberio-beacon", "endpoint.json")
 
 
 class TestBeaconContentValidation:
@@ -45,14 +45,14 @@ class TestBeaconContentValidation:
     def test_http_scheme_rejected_by_default(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        monkeypatch.delenv("PANTAU_ALLOW_INSECURE_BEACON", raising=False)
+        monkeypatch.delenv("TIBERIO_ALLOW_INSECURE_BEACON", raising=False)
         with pytest.raises(BeaconError, match="https"):
             _reader(b'{"base_url": "http://home.example.net"}').get_base_url()
 
     def test_http_scheme_allowed_with_insecure_flag(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        monkeypatch.setenv("PANTAU_ALLOW_INSECURE_BEACON", "true")
+        monkeypatch.setenv("TIBERIO_ALLOW_INSECURE_BEACON", "true")
         reader = _reader(b'{"base_url": "http://home.example.net/"}')
         assert reader.get_base_url() == "http://home.example.net"
 
@@ -68,7 +68,7 @@ class TestBeaconRotation:
         fake_s3 = FakeS3Client(
             b'{"base_url": "https://old.example.net"}', etag='"etag-1"'
         )
-        reader = BeaconReader(fake_s3, "pantau-alexa-beacon", "endpoint.json")
+        reader = BeaconReader(fake_s3, "tiberio-beacon", "endpoint.json")
         assert reader.get_base_url() == "https://old.example.net"
 
         fake_s3.body = b'{"base_url": "https://new.example.net"}'
@@ -78,7 +78,7 @@ class TestBeaconRotation:
 
     def test_unchanged_etag_serves_cached_base_url(self) -> None:
         fake_s3 = FakeS3Client(b'{"base_url": "https://home.example.net"}')
-        reader = BeaconReader(fake_s3, "pantau-alexa-beacon", "endpoint.json")
+        reader = BeaconReader(fake_s3, "tiberio-beacon", "endpoint.json")
 
         assert reader.get_base_url() == "https://home.example.net"
         assert reader.get_base_url() == "https://home.example.net"

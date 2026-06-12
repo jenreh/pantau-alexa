@@ -43,8 +43,8 @@ resource "aws_lambda_function" "this" {
   # secret (least privilege, KONZEPT section 9).
   environment {
     variables = {
-      PANTAU_BEACON_BUCKET = var.beacon_bucket_name
-      PANTAU_BEACON_KEY    = var.beacon_object_key
+      TIBERIO_BEACON_BUCKET = var.beacon_bucket_name
+      TIBERIO_BEACON_KEY    = var.beacon_object_key
     }
   }
 

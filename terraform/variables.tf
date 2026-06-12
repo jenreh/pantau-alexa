@@ -7,7 +7,7 @@ variable "aws_region" {
 variable "name_prefix" {
   description = "Prefix for resource names (Lambdas, roles, API)."
   type        = string
-  default     = "pantau-alexa"
+  default     = "tiberio"
 }
 
 variable "alexa_skill_id" {
@@ -18,7 +18,7 @@ variable "alexa_skill_id" {
 variable "beacon_bucket_name" {
   description = "Globally unique name of the beacon S3 bucket."
   type        = string
-  default     = "pantau-alexa-beacon"
+  default     = "tiberio-beacon"
 }
 
 variable "beacon_object_key" {
@@ -60,7 +60,7 @@ variable "shared_secret_version" {
 variable "shared_secret_ssm_param" {
   description = "Name of the SSM SecureString parameter holding the shared secret."
   type        = string
-  default     = "/pantau-alexa/shared-secret"
+  default     = "/tiberio/shared-secret"
 }
 
 variable "create_home_publisher_user" {
@@ -80,5 +80,5 @@ variable "lambda_runtime" {
 variable "state_bucket_name" {
   description = "Name of the S3 bucket holding the Terraform state (bootstrap)."
   type        = string
-  default     = "pantau-alexa-tfstate"
+  default     = "tiberio-tfstate"
 }

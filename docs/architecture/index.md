@@ -1,6 +1,6 @@
 # System Overview
 
-pantau-alexa has two distinct runtime zones — **AWS Edge** (stable, public, planned in Phase 5) and the **Home Server** (dynamic IP, your LAN, implemented in Phases 0–4). Between them sits an S3 object that tells the Lambda where to find your home server right now.
+tiberio has two distinct runtime zones — **AWS Edge** (stable, public, planned in Phase 5) and the **Home Server** (dynamic IP, your LAN, implemented in Phases 0–4). Between them sits an S3 object that tells the Lambda where to find your home server right now.
 
 ## The big picture
 
@@ -149,7 +149,7 @@ The **golden rule**: imports only flow *inward* (toward the domain). Adapters kn
 
 ```mermaid
 gantt
-    title pantau-alexa — implementation phases
+    title tiberio — implementation phases
     dateFormat YYYY-MM-DD
     section Done
     Phase 0 · Scaffold       :done,  p0, 2026-01-01, 7d

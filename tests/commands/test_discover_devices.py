@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from pantau.adapters.yaml_device_registry import YamlDeviceRegistry
-from pantau.commands.discover_devices import DiscoverDevicesCommand
+from tiberio.adapters.yaml_device_registry import YamlDeviceRegistry
+from tiberio.commands.discover_devices import DiscoverDevicesCommand
 
 
 class TestDiscoverDevices:

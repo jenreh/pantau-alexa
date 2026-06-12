@@ -1,6 +1,6 @@
 # adapters/
 
-**Location:** `pantau/adapters/`  
+**Location:** `tiberio/adapters/`  
 **Rule:** Each adapter wraps exactly one external library or technology. It translates library-specific exceptions into domain errors.
 
 Adapters are the bridge between your clean business logic and the messy real world. They speak "harmonyhub" or "FRITZ!Box" externally and "domain model" internally. If the Harmony library changes its API, you change exactly one file: `harmony_tv_adapter.py`.

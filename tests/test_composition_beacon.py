@@ -9,11 +9,11 @@ from __future__ import annotations
 
 import pytest
 
-import pantau.adapters.s3_beacon_publisher as s3_module
-from pantau.adapters.mock_beacon_publisher import MockBeaconPublisher
-from pantau.adapters.s3_beacon_publisher import S3BeaconPublisher
-from pantau.composition import _build_beacon_publisher
-from pantau.config.settings import Settings
+import tiberio.adapters.s3_beacon_publisher as s3_module
+from tiberio.adapters.mock_beacon_publisher import MockBeaconPublisher
+from tiberio.adapters.s3_beacon_publisher import S3BeaconPublisher
+from tiberio.composition import _build_beacon_publisher
+from tiberio.config.settings import Settings
 
 
 class _FakeBoto3:

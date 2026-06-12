@@ -218,20 +218,20 @@ That's it. All existing code is unchanged.
 
 ## Managing users (CLI)
 
-The `pantau users` CLI manages the SQLite user database:
+The `tiberio users` CLI manages the SQLite user database:
 
 ```bash
 # Create a new user
-uv run pantau users create --username alice
+uv run tiberio users create --username alice
 
 # List all users
-uv run pantau users list
+uv run tiberio users list
 
 # Delete a user
-uv run pantau users delete --username alice
+uv run tiberio users delete --username alice
 
 # Change a password
-uv run pantau users set-password --username alice
+uv run tiberio users set-password --username alice
 ```
 
 ---

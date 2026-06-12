@@ -1,4 +1,4 @@
-"""Tests for the pantau-setup CLI orchestrator."""
+"""Tests for the tiberio-setup CLI orchestrator."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from typing import Any
 import pytest
 from typer.testing import CliRunner
 
-import pantau.cli.setup as setup_cli
+import tiberio.cli.setup as setup_cli
 
 runner = CliRunner()
 
@@ -87,7 +87,7 @@ def skill_package(tmp_path: Path) -> Path:
 
 
 _OUTPUTS = {
-    "directive_lambda_arn": "arn:aws:lambda:eu-central-1:1:function:pantau-directive",
+    "directive_lambda_arn": "arn:aws:lambda:eu-central-1:1:function:tiberio-directive",
     "oauth_authorize_url": "https://api.example.com/oauth/authorize",
     "oauth_token_url": "https://api.example.com/oauth/token",
 }
@@ -182,48 +182,48 @@ class TestCheck:
 class TestSecrets:
     def test_generates_missing_secrets(self, tmp_path: Path) -> None:
         env_file = tmp_path / ".env"
-        env_file.write_text("PANTAU_JWT_SECRET=\nPANTAU_SHARED_SECRET=\n")
+        env_file.write_text("TIBERIO_JWT_SECRET=\nTIBERIO_SHARED_SECRET=\n")
         result = runner.invoke(setup_cli.app, ["secrets", "--env-file", str(env_file)])
         assert result.exit_code == 0
         parsed = setup_cli.parse_env(env_file.read_text())
-        assert not setup_cli.needs_secret(parsed["PANTAU_JWT_SECRET"])
-        assert not setup_cli.needs_secret(parsed["PANTAU_SHARED_SECRET"])
+        assert not setup_cli.needs_secret(parsed["TIBERIO_JWT_SECRET"])
+        assert not setup_cli.needs_secret(parsed["TIBERIO_SHARED_SECRET"])
 
     def test_keeps_existing_strong_secrets(self, tmp_path: Path) -> None:
         env_file = tmp_path / ".env"
         strong = "a" * 40
         env_file.write_text(
-            f"PANTAU_JWT_SECRET={strong}\nPANTAU_SHARED_SECRET={strong}\n"
+            f"TIBERIO_JWT_SECRET={strong}\nTIBERIO_SHARED_SECRET={strong}\n"
         )
         result = runner.invoke(setup_cli.app, ["secrets", "--env-file", str(env_file)])
         assert result.exit_code == 0
         assert "nothing to do" in result.output
-        assert setup_cli.parse_env(env_file.read_text())["PANTAU_JWT_SECRET"] == strong
+        assert setup_cli.parse_env(env_file.read_text())["TIBERIO_JWT_SECRET"] == strong
 
     def test_force_regenerates(self, tmp_path: Path) -> None:
         env_file = tmp_path / ".env"
         strong = "a" * 40
         env_file.write_text(
-            f"PANTAU_JWT_SECRET={strong}\nPANTAU_SHARED_SECRET={strong}\n"
+            f"TIBERIO_JWT_SECRET={strong}\nTIBERIO_SHARED_SECRET={strong}\n"
         )
         result = runner.invoke(
             setup_cli.app, ["secrets", "--env-file", str(env_file), "--force"]
         )
         assert result.exit_code == 0
-        assert setup_cli.parse_env(env_file.read_text())["PANTAU_JWT_SECRET"] != strong
+        assert setup_cli.parse_env(env_file.read_text())["TIBERIO_JWT_SECRET"] != strong
 
     def test_seeds_from_template(self, tmp_path: Path) -> None:
         env_file = tmp_path / ".env"
         template = tmp_path / ".env.default"
-        template.write_text("PANTAU_PORT=8080\nPANTAU_JWT_SECRET=\n")
+        template.write_text("TIBERIO_PORT=8080\nTIBERIO_JWT_SECRET=\n")
         result = runner.invoke(
             setup_cli.app,
             ["secrets", "--env-file", str(env_file), "--template", str(template)],
         )
         assert result.exit_code == 0
         parsed = setup_cli.parse_env(env_file.read_text())
-        assert parsed["PANTAU_PORT"] == "8080"
-        assert not setup_cli.needs_secret(parsed["PANTAU_JWT_SECRET"])
+        assert parsed["TIBERIO_PORT"] == "8080"
+        assert not setup_cli.needs_secret(parsed["TIBERIO_JWT_SECRET"])
 
 
 # ---------------------------------------------------------------------------
@@ -298,7 +298,7 @@ class TestInfra:
         tf_dir.mkdir()
         (tf_dir / "deploy-aws.sh").write_text("#!/usr/bin/env zsh\n")
         env_file = tmp_path / ".env"
-        env_file.write_text("PANTAU_SHARED_SECRET=" + "s" * 40 + "\n")
+        env_file.write_text("TIBERIO_SHARED_SECRET=" + "s" * 40 + "\n")
         recorder = _RecordingRunner()
         monkeypatch.setattr(setup_cli, "run_command", recorder)
 
@@ -520,13 +520,13 @@ class TestRunAll:
         assert result.exit_code == 0, result.output
         # secrets were written
         parsed = setup_cli.parse_env(env_file.read_text())
-        assert not setup_cli.needs_secret(parsed["PANTAU_JWT_SECRET"])
+        assert not setup_cli.needs_secret(parsed["TIBERIO_JWT_SECRET"])
         # the orchestrated external calls happened in order
         joined = [" ".join(c["args"]) for c in recorder.calls]
         assert any("bootstrap" in j for j in joined)
         assert any("migrate" in j for j in joined)
-        assert any("pantau-users add alice" in j for j in joined)
-        assert any("pantau-beacon publish" in j for j in joined)
+        assert any("tiberio-users add alice" in j for j in joined)
+        assert any("tiberio-beacon publish" in j for j in joined)
         assert any("update-skill-manifest" in j for j in joined)
         assert any("update-account-linking-info" in j for j in joined)
 

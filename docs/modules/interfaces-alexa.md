@@ -1,6 +1,6 @@
 # interfaces/alexa/
 
-**Location:** `pantau/interfaces/alexa/`  
+**Location:** `tiberio/interfaces/alexa/`  
 **Rule:** No business logic. Translate between Alexa's JSON format and the application's commands. Translate domain errors back to Alexa error codes.
 
 The Alexa interface is the delivery layer for Smart Home directives. It knows everything about the Alexa Smart Home API v3 and nothing about how devices actually work.

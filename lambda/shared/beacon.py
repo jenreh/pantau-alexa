@@ -40,7 +40,7 @@ class BeaconReader:
 
         Only ``https://`` URLs are accepted (KONZEPT §9: the AWS→home leg
         carries bearer tokens and credentials). ``http://`` is allowed only
-        when ``PANTAU_ALLOW_INSECURE_BEACON=true`` (local testing).
+        when ``TIBERIO_ALLOW_INSECURE_BEACON=true`` (local testing).
         """
         beacon = self._read_beacon()
         base_url = beacon.get("base_url")
@@ -50,7 +50,7 @@ class BeaconReader:
         if not base_url.startswith("https://") and not insecure_ok:
             raise BeaconError(
                 "Beacon 'base_url' must be an https URL "
-                "(set PANTAU_ALLOW_INSECURE_BEACON=true to allow http)"
+                "(set TIBERIO_ALLOW_INSECURE_BEACON=true to allow http)"
             )
         return base_url.rstrip("/")
 
@@ -82,14 +82,14 @@ class BeaconReader:
 
 
 def create_reader_from_env() -> BeaconReader:
-    """Build a reader from PANTAU_BEACON_BUCKET / PANTAU_BEACON_KEY env vars."""
-    bucket = os.environ["PANTAU_BEACON_BUCKET"]
-    key = os.environ.get("PANTAU_BEACON_KEY", _DEFAULT_KEY)
+    """Build a reader from TIBERIO_BEACON_BUCKET / TIBERIO_BEACON_KEY env vars."""
+    bucket = os.environ["TIBERIO_BEACON_BUCKET"]
+    key = os.environ.get("TIBERIO_BEACON_KEY", _DEFAULT_KEY)
     return BeaconReader(boto3.client("s3"), bucket, key)
 
 
 def _allow_insecure_beacon() -> bool:
-    value = os.environ.get("PANTAU_ALLOW_INSECURE_BEACON", "")
+    value = os.environ.get("TIBERIO_ALLOW_INSECURE_BEACON", "")
     return value.strip().lower() in ("1", "true", "yes")
 
 

@@ -1,18 +1,18 @@
 # Alexa Skill Setup
 
-Runbook for wiring the deployed AWS edge ([Terraform](https://github.com/jenreh/pantau-alexa/tree/main/terraform)) to an Alexa
+Runbook for wiring the deployed AWS edge ([Terraform](https://github.com/jenreh/tiberio/tree/main/terraform)) to an Alexa
 Smart-Home skill, linking the account, and verifying end-to-end. The manifest
 and account-linking templates live in
-[`skill-package/`](https://github.com/jenreh/pantau-alexa/tree/main/skill-package).
+[`skill-package/`](https://github.com/jenreh/tiberio/tree/main/skill-package).
 
-## 0. Automated path (`pantau-setup`)
+## 0. Automated path (`tiberio-setup`)
 
-Most of this runbook is automated by the `pantau-setup` CLI. After creating the
+Most of this runbook is automated by the `tiberio-setup` CLI. After creating the
 skill (step 1, to obtain the skill ID) and configuring the `ask` CLI
 (`ask configure`):
 
 ```bash
-uv run pantau-setup run \
+uv run tiberio-setup run \
   --skill-id amzn1.ask.skill.<your-skill-id> \
   --tfvars terraform/terraform.tfvars \
   --username <user> --base-url https://<your-tunnel> --yes
@@ -22,7 +22,7 @@ This generates `.env` secrets, deploys the AWS edge, renders
 `skill-package/build/{skill.json,accountLinking.json}` from the Terraform
 outputs, creates the user, publishes the beacon, and pushes the manifest +
 account-linking config to the skill (`ask smapi`). Steps 4–6 below then reduce
-to: copy the redirect URLs into `PANTAU_OAUTH_ALLOWED_REDIRECT_URIS`, enable the
+to: copy the redirect URLs into `TIBERIO_OAUTH_ALLOWED_REDIRECT_URIS`, enable the
 skill in the Alexa app, log in, and run device discovery. The manual steps
 below remain the source of truth if you prefer to wire the console by hand.
 
@@ -77,14 +77,14 @@ Console → **Account Linking** (values mirror
 | Domain list / redirect URLs | leave empty / defaults                                 |
 
 After saving, copy the three **Alexa Redirect URLs** shown in the console
-into the home server's `PANTAU_OAUTH_ALLOWED_REDIRECT_URIS` (comma-separated)
+into the home server's `TIBERIO_OAUTH_ALLOWED_REDIRECT_URIS` (comma-separated)
 and restart the server.
 
 Home-server prerequisites:
 
-- `PANTAU_JWT_SECRET`, `PANTAU_SHARED_SECRET` set (the latter matching the
+- `TIBERIO_JWT_SECRET`, `TIBERIO_SHARED_SECRET` set (the latter matching the
   SSM parameter from `shared_secret_param`).
-- A user created via `uv run pantau-users add <username>`.
+- A user created via `uv run tiberio-users add <username>`.
 - Tunnel running and the beacon published to S3 (`endpoint.json`).
 
 Then: Alexa app → skill → **Enable to use** → log in on the home server's
@@ -101,7 +101,7 @@ discovery.
 
 Pre-check without hardware: invoke the Lambda with
 `scripts/sample-events/discovery.json` (see
-[`scripts/sample-events/README.md`](https://github.com/jenreh/pantau-alexa/tree/main/scripts/sample-events)).
+[`scripts/sample-events/README.md`](https://github.com/jenreh/tiberio/tree/main/scripts/sample-events)).
 
 ## 6. E2E verification checklist
 

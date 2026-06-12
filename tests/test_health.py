@@ -7,8 +7,8 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from pantau.api.app import create_app
-from pantau.config.settings import Settings
+from tiberio.api.app import create_app
+from tiberio.config.settings import Settings
 
 
 @pytest.fixture

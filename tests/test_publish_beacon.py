@@ -6,9 +6,9 @@ from datetime import UTC, datetime
 
 import pytest
 
-from pantau.adapters.mock_beacon_publisher import MockBeaconPublisher
-from pantau.application.publish_beacon import BeaconPublisher
-from pantau.domain.beacon import Beacon
+from tiberio.adapters.mock_beacon_publisher import MockBeaconPublisher
+from tiberio.application.publish_beacon import BeaconPublisher
+from tiberio.domain.beacon import Beacon
 
 _FIXED_NOW = datetime(2026, 6, 11, 12, 0, 0, tzinfo=UTC)
 

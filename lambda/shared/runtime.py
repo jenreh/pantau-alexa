@@ -17,9 +17,9 @@ _beacon_reader: BeaconReader | None = None
 
 
 def timeout_seconds() -> float:
-    """Upstream HTTP timeout from PANTAU_HTTP_TIMEOUT_SECONDS (default 6 s)."""
+    """Upstream HTTP timeout from TIBERIO_HTTP_TIMEOUT_SECONDS (default 6 s)."""
     return float(
-        os.environ.get("PANTAU_HTTP_TIMEOUT_SECONDS", _DEFAULT_TIMEOUT_SECONDS)
+        os.environ.get("TIBERIO_HTTP_TIMEOUT_SECONDS", _DEFAULT_TIMEOUT_SECONDS)
     )
 
 

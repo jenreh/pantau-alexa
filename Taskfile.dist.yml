@@ -26,7 +26,7 @@ includes:
 silent: true
 
 vars:
-  PROJECT: pantau
+  PROJECT: tiberio
 
 tasks:
   default:
@@ -82,4 +82,4 @@ tasks:
 
   run:
     desc: Run the FastAPI server (development mode)
-    cmd: uv run uvicorn pantau.api.app:create_app --reload --factory --host 0.0.0.0 --port 8080
+    cmd: uv run uvicorn tiberio.api.app:create_app --reload --factory --host 0.0.0.0 --port 8080

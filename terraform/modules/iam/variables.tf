@@ -1,7 +1,7 @@
 variable "name_prefix" {
   description = "Prefix for all IAM resource names."
   type        = string
-  default     = "pantau-alexa"
+  default     = "tiberio"
 }
 
 variable "beacon_object_arn" {

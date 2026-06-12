@@ -1,6 +1,6 @@
 # Hexagonal Architecture
 
-pantau-alexa uses **Hexagonal Architecture** (also called *Ports & Adapters*). This page explains what that means, why it matters, and how it is applied in this codebase — no prior architecture knowledge assumed.
+tiberio uses **Hexagonal Architecture** (also called *Ports & Adapters*). This page explains what that means, why it matters, and how it is applied in this codebase — no prior architecture knowledge assumed.
 
 ## Why bother with an architecture pattern?
 

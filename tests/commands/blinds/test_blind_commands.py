@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import pytest
 
-from pantau.adapters.mock_blind_adapter import MockBlindAdapter
-from pantau.adapters.yaml_device_registry import YamlDeviceRegistry
-from pantau.commands.adjust_range import AdjustRangeCommand
-from pantau.commands.set_range import SetRangeCommand
-from pantau.composition import Container
-from pantau.domain.errors import DeviceNotFoundError
+from tiberio.adapters.mock_blind_adapter import MockBlindAdapter
+from tiberio.adapters.yaml_device_registry import YamlDeviceRegistry
+from tiberio.commands.adjust_range import AdjustRangeCommand
+from tiberio.commands.set_range import SetRangeCommand
+from tiberio.composition import Container
+from tiberio.domain.errors import DeviceNotFoundError
 
 
 def _container(adapter: MockBlindAdapter, registry: YamlDeviceRegistry) -> Container:

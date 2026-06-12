@@ -141,7 +141,7 @@ generate_backend_hcl() {
     bucket=$(read_tfvar "state_bucket_name")
     region=$(read_tfvar "aws_region")
 
-    [[ -n "$bucket" ]] || bucket="pantau-alexa-tfstate"
+    [[ -n "$bucket" ]] || bucket="tiberio-tfstate"
     [[ -n "$region" ]] || region="eu-central-1"
 
     local hcl_file="$TERRAFORM_DIR/backend.prod.hcl"
