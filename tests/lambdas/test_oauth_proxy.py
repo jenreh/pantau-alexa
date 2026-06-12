@@ -1,4 +1,4 @@
-"""Tests for the OAuth catch-all proxy Lambda (API Gateway HTTP API v2)."""
+"""Tests for the OAuth catch-all proxy Lambda (Lambda Function URL, payload v2)."""
 
 from __future__ import annotations
 

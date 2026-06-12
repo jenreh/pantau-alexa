@@ -5,12 +5,12 @@ output "directive_lambda_arn" {
 
 output "oauth_authorize_url" {
   description = "Authorization URI for the Alexa account-linking configuration."
-  value       = module.apigw_oauth.authorize_url
+  value       = module.lambda_url_oauth.authorize_url
 }
 
 output "oauth_token_url" {
   description = "Access token URI for the Alexa account-linking configuration."
-  value       = module.apigw_oauth.token_url
+  value       = module.lambda_url_oauth.token_url
 }
 
 output "beacon_bucket_name" {
@@ -28,8 +28,8 @@ output "deployment_summary" {
   description = "Key values needed for the Alexa skill configuration."
   value = {
     directive_lambda_arn = module.lambda_directive.function_arn
-    oauth_authorize_url  = module.apigw_oauth.authorize_url
-    oauth_token_url      = module.apigw_oauth.token_url
+    oauth_authorize_url  = module.lambda_url_oauth.authorize_url
+    oauth_token_url      = module.lambda_url_oauth.token_url
     beacon_bucket_name   = module.s3_beacon.bucket_name
     beacon_object_key    = module.s3_beacon.beacon_object_key
     shared_secret_param  = aws_ssm_parameter.shared_secret.name

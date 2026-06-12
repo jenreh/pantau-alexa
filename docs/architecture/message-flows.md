@@ -7,7 +7,7 @@ This page traces the two critical request paths through the system step by step.
 Account Linking happens once, when a user enables the Alexa Skill for the first time. The goal: exchange a username/password for a pair of JWT tokens that Alexa will attach to every future directive.
 
 ::: info Phase status
-The OAuth2 server on the home server (right half of the diagram) is **fully implemented** (Phase 4). The API Gateway proxy (left half) is **planned** (Phase 5). During development you can test OAuth directly at `http://localhost:8080/oauth/...`.
+The OAuth2 server on the home server (right half of the diagram) is **fully implemented** (Phase 4). The OAuth proxy (left half) runs on a **Lambda Function URL** (Phase 5). During development you can test OAuth directly at `http://localhost:8080/oauth/...`.
 :::
 
 ```mermaid
@@ -15,7 +15,7 @@ sequenceDiagram
     actor User as 👤 User
     participant App as Alexa App
     participant Alexa as Alexa Cloud
-    participant APIGW as API Gateway<br/>(OAuth Proxy — Phase 5)
+    participant APIGW as Lambda Function URL<br/>(OAuth Proxy)
     participant HS as Home Server<br/>/oauth
     participant DB as SQLite<br/>(users + tokens)
 
@@ -166,7 +166,7 @@ Alexa automatically refreshes the access token when it expires (every 60 minutes
 ```mermaid
 sequenceDiagram
     participant Alexa as Alexa Cloud
-    participant APIGW as API Gateway (Phase 5)
+    participant APIGW as Lambda Function URL
     participant HS as Home Server /oauth/token
     participant DB as SQLite
 

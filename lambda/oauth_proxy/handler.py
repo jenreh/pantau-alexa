@@ -1,4 +1,4 @@
-"""OAuth catch-all proxy Lambda (API Gateway HTTP API, payload v2).
+"""OAuth catch-all proxy Lambda (Lambda Function URL, payload v2).
 
 Forwards ``/oauth/*`` requests transparently to the home server resolved from
 the S3 beacon: method, path, query string, filtered headers, cookies and body
@@ -131,7 +131,7 @@ def _decode_request_body(event: dict[str, Any]) -> bytes | None:
 def _build_result(
     status: int, header_items: Iterable[tuple[str, str]], body: bytes
 ) -> dict[str, Any]:
-    """Map an upstream response onto the API Gateway v2 response shape."""
+    """Map an upstream response onto the Function URL (payload v2) response shape."""
     headers: dict[str, str] = {}
     cookies: list[str] = []
     content_type = ""

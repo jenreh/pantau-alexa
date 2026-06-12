@@ -15,7 +15,7 @@ graph TD
     subgraph AWS["AWS Edge — Phase 5 (planned)"]
         Lambda["Lambda<br/>Directive Proxy"]
         S3[("S3 Beacon<br/>endpoint.json")]
-        APIGW["API Gateway<br/>OAuth Proxy"]
+        APIGW["Lambda Function URL<br/>OAuth Proxy"]
     end
 
     subgraph Home["Home Server — Phases 0–4 (implemented)"]
@@ -101,7 +101,7 @@ Amazon's servers. They receive your voice command, determine the intent (e.g. "t
 |---|---|
 | **Lambda: Directive Proxy** | The Alexa Skill's endpoint ARN. Reads current home server URL from S3, then forwards the directive. |
 | **S3: endpoint.json** | The *beacon* — a small JSON file `{ "base_url": "...", "updated_at": "..." }` that the home server keeps updated via `BeaconPublisherPort`. |
-| **API Gateway: OAuth Proxy** | Stable HTTPS URLs for Alexa Account Linking. Transparently proxies `/oauth/authorize` and `/oauth/token` to the home server. |
+| **Lambda Function URL: OAuth Proxy** | Stable HTTPS URLs for Alexa Account Linking. Transparently proxies `/oauth/authorize` and `/oauth/token` to the home server. |
 
 ### Home Server *(Phases 0–4, implemented)*
 

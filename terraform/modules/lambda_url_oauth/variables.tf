@@ -1,9 +1,3 @@
-variable "api_name" {
-  description = "Name of the OAuth proxy HTTP API."
-  type        = string
-  default     = "tiberio-oauth"
-}
-
 variable "function_name" {
   description = "Name of the OAuth proxy Lambda function."
   type        = string
@@ -46,6 +40,16 @@ variable "memory_size_mb" {
   description = "Lambda memory size in MB."
   type        = number
   default     = 256
+}
+
+variable "reserved_concurrency" {
+  description = <<-EOT
+    Reserved concurrent executions for the OAuth proxy (blast-radius cap). A
+    private account-linking flow is sequential, so a small value suffices; set
+    to -1 to leave the function unreserved.
+  EOT
+  type        = number
+  default     = 5
 }
 
 variable "role_arn" {

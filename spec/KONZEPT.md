@@ -27,7 +27,7 @@ Zwei harte Randbedingungen prägen die Architektur:
 
 Da Alexa Smart-Home-Skills zwingend eine **AWS-Lambda** als Endpunkt verlangen und die
 Geräte-Bibliotheken LAN-Zugriff brauchen (also **nicht** in Lambda laufen können), ergibt
-sich zwingend das Muster: **Alexa → AWS (Lambda/API Gateway, stabil) → S3-Lookup →
+sich zwingend das Muster: **Alexa → AWS (Lambda, stabil) → S3-Lookup →
 FastAPI-Heimserver (dynamisch)**. AWS ist dabei ein **dummer Reverse-Proxy**; die gesamte
 Intelligenz (Geräteerkennung, Orchestrierung) liegt im FastAPI-Server.
 
@@ -40,7 +40,7 @@ Intelligenz (Geräteerkennung, Orchestrierung) liegt im FastAPI-Server.
 | 1 | Skill-Typ | **Smart-Home-Skill** | Befehle ohne Invocation-Name („Alexa, schalte … ein") nur hier möglich. |
 | 2 | Skill-Endpunkt | **AWS Lambda als Proxy** | Smart-Home-Skills erfordern Lambda; Bibliotheken brauchen LAN → FastAPI im Heim. |
 | 3 | Server-Erreichbarkeit | **Dynamisch + S3-Beacon** | Heimserver veröffentlicht aktuelle Tunnel-URL nach S3; Lambda liest sie vor jedem Befehl. |
-| 4 | OAuth/Account Linking | **Heimserver als IdP, via AWS gefrontet** | Stabile OAuth-Endpunkte (API Gateway) als Pflicht von Alexa; eigentliche IdP-Logik im FastAPI-Server. |
+| 4 | OAuth/Account Linking | **Heimserver als IdP, via AWS gefrontet** | Stabile OAuth-Endpunkte (Lambda Function URL) als Pflicht von Alexa; eigentliche IdP-Logik im FastAPI-Server. |
 | 5 | Kanalwahl („ZDF") | **Sender als eigene PowerController-Geräte** | Umgeht die fragile `ChannelController`-Namensauflösung; „schalte ZDF ein" = robustes `TurnOn`. Server orchestriert Aktivität + Kanal. |
 | 6 | Mute/Unmute | **`Alexa.Speaker.SetMute` + Assumed-State** | Harmony bietet nur einen **Mute-Toggle** (keine diskrete An/Aus). Server hält angenommenen Zustand. |
 | 7 | Rollos | **`Alexa.RangeController` (Position 0–100) + Semantik** | `SetRangeValue(50)` für „halb"; Semantik-Mapping für „runter"/„hoch". |
@@ -57,23 +57,23 @@ Intelligenz (Geräteerkennung, Orchestrierung) liegt im FastAPI-Server.
    │  Nutzer  │ ────────────────► │  Alexa (Cloud)   │
    └──────────┘                   └───────┬──────────┘
                                           │ (1) Smart-Home-Directive  (2) OAuth (Account Linking)
-                          ┌───────────────┴───────────────────────────┐
-                          ▼                                            ▼
+                          ┌───────────────┴──────────────────────────┐
+                          ▼                                          ▼
               ┌───────────────────────┐                  ┌────────────────────────┐
-              │  Lambda: Directive-   │                  │ API Gateway + Lambda:  │
+              │  Lambda: Directive-   │                  │ Lambda Function URL:   │
               │  Proxy (Skill-ARN)    │                  │ OAuth-Proxy            │
               └───────────┬───────────┘                  └───────────┬────────────┘
-                          │  S3 GET (ETag, conditional)               │
-                          ▼                                           │
+                          │  S3 GET (ETag, conditional)              │
+                          ▼                                          │
               ┌───────────────────────┐                              │
-              │  S3: endpoint.json    │ ◄──── PUT (Beacon-Updater) ───┼──┐
+              │  S3: endpoint.json    │ ◄──── PUT (Beacon-Updater) ──┼──┐
               │  { base_url, ... }    │                              │  │
               └───────────────────────┘                              │  │
-                          │  forward (HTTPS-Tunnel + Shared-Secret)   │  │
-                          └──────────────────┬────────────────────────┘  │
-                                             ▼                            │
-                          ┌────────────────────────────────────────┐     │
-                          │      FastAPI-Heimserver (LAN)           │─────┘
+                          │  forward (HTTPS-Tunnel + Shared-Secret)  │  │
+                          └──────────────────┬───────────────────────┘  │
+                                             ▼                          │
+                          ┌─────────────────────────────────────────┐   │
+                          │      FastAPI-Heimserver (LAN)           │───┘
                           │  • /alexa/directive  (Smart-Home)       │
                           │  • /oauth/authorize, /oauth/token (IdP) │
                           │  • Orchestrierung + Device-Registry     │
@@ -89,11 +89,11 @@ Intelligenz (Geräteerkennung, Orchestrierung) liegt im FastAPI-Server.
 ### Datenfluss A — Account Linking (einmalig beim Aktivieren)
 
 1. Nutzer aktiviert Skill in der Alexa-App → Alexa öffnet die **Authorization-URI**
-   (stabile API-Gateway-URL).
+   (stabile Lambda-Function-URL).
 2. OAuth-Proxy liest `endpoint.json` aus S3, leitet Browser-Flow (Login-Seite, Formular,
    302-Redirect) transparent an den **FastAPI-IdP** weiter.
 3. Nutzer meldet sich am Heimserver an → Authorization-Code → Alexa tauscht ihn an der
-   **Token-URI** (API Gateway → Proxy → FastAPI) gegen Access-/Refresh-Token (PKCE).
+   **Token-URI** (Function URL → Proxy → FastAPI) gegen Access-/Refresh-Token (PKCE).
 4. Erst jetzt ist der Skill nutzbar; Alexa führt `Alexa.Discovery` aus.
 
 ### Datenfluss B — Sprachbefehl (pro Kommando)
@@ -283,7 +283,7 @@ Alexa `ENDPOINT_UNREACHABLE`).
   (Access/Refresh), `/oauth/jwks` optional. Access-Token als signiertes JWT (kurzlebig),
   Refresh-Token rotierend.
 - In der Alexa-Konsole werden als **stabile** Authorization-/Token-URIs die
-  **API-Gateway-URLs** eingetragen; der OAuth-Proxy leitet zur S3-ermittelten
+  **Lambda-Function-URLs** eingetragen; der OAuth-Proxy leitet zur S3-ermittelten
   Heimserver-Adresse weiter.
 - Jede Smart-Home-Directive trägt das Bearer-Token; der Heimserver validiert es
   (Signatur, Ablauf, Scope) in einer Middleware (`TokenValidator`-Port).
@@ -300,8 +300,10 @@ Alexa `ENDPOINT_UNREACHABLE`).
   liest `endpoint.json` (conditional GET, ETag im Warm-Container-Cache), leitet JSON an
   `/alexa/directive` weiter, gibt Alexa-Response zurück. Diese Lambda-ARN wird im Skill
   als Default-Endpoint hinterlegt.
-- **OAuth-Proxy** (`API Gateway HTTP API` + Lambda): Catch-all-Route für `/oauth/*`,
-  transparente Weiterleitung (inkl. Cookies/302) an den Heimserver.
+- **OAuth-Proxy** (`Lambda Function URL` + Lambda): stabile öffentliche HTTPS-URL,
+  leitet alle `/oauth/*`-Pfade transparent (inkl. Cookies/302) an den Heimserver
+  weiter. Function URLs nutzen Payload-Format v2.0 (wie ein HTTP API) und kosten
+  nichts pro Request — nur die Lambda-Invocation.
 - **S3-Bucket** (`tiberio-beacon`): Objekt `endpoint.json`
   `{ "base_url": "...", "updated_at": "...", "health": "ok" }`; **versioniert**,
   **SSE-verschlüsselt**, Bucket-Policy least-privilege.
@@ -322,7 +324,7 @@ Alexa `ENDPOINT_UNREACHABLE`).
 
 ### Terraform
 
-Module: `s3_beacon`, `iam`, `lambda_directive`, `apigw_oauth`; Outputs u. a. die
+Module: `s3_beacon`, `iam`, `lambda_directive`, `lambda_url_oauth`; Outputs u. a. die
 **Directive-Lambda-ARN** und die **OAuth-URLs** für die Alexa-Skill-Konfiguration.
 
 ---
@@ -381,7 +383,7 @@ Module: `s3_beacon`, `iam`, `lambda_directive`, `apigw_oauth`; Outputs u. a. die
 
 **Phase 5 — AWS-Edge: Lambda-Proxy + S3-Beacon + Terraform**
 
-- Directive-Lambda (conditional S3-GET + Forwarding), OAuth-Proxy (API Gateway),
+- Directive-Lambda (conditional S3-GET + Forwarding), OAuth-Proxy (Lambda Function URL),
   S3-Beacon-Bucket, IAM, Shared-Secret; **Beacon-Updater** im Heimserver.
 - Terraform-Module + Outputs; `sam local`/Test-Events.
 

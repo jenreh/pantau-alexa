@@ -1,5 +1,5 @@
 # Tiberio AWS edge (KONZEPT section 9): S3 beacon, least-privilege IAM,
-# directive proxy Lambda and OAuth proxy behind an HTTP API.
+# directive proxy Lambda and OAuth proxy behind a Lambda Function URL.
 
 provider "aws" {
   region = var.aws_region
@@ -55,10 +55,9 @@ module "lambda_directive" {
   alexa_skill_id          = var.alexa_skill_id
 }
 
-module "apigw_oauth" {
-  source = "./modules/apigw_oauth"
+module "lambda_url_oauth" {
+  source = "./modules/lambda_url_oauth"
 
-  api_name           = "${var.name_prefix}-oauth"
   function_name      = "${var.name_prefix}-oauth-proxy"
   source_dir         = local.lambda_source_dir
   runtime            = var.lambda_runtime

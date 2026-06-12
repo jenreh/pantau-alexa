@@ -30,7 +30,7 @@ Home internet connections get a different IP every time they reconnect, and many
 
 Before an Alexa Smart Home Skill can control your devices, the user must complete *Account Linking* — an OAuth2 Authorization Code flow that pairs your Amazon account with your home server. Amazon's servers need to reach the OAuth endpoints at a *stable, public HTTPS URL*.
 
-**Solution:** The home server *is* the OAuth2 Identity Provider, but the stable public URLs (used in the Alexa Skill configuration) point to API Gateway endpoints on AWS. Those AWS endpoints transparently proxy all OAuth traffic to the home server using the same S3-beacon address lookup.
+**Solution:** The home server *is* the OAuth2 Identity Provider, but the stable public URLs (used in the Alexa Skill configuration) point to a Lambda Function URL on AWS. That AWS endpoint transparently proxies all OAuth traffic to the home server using the same S3-beacon address lookup.
 
 ## How it all fits together
 

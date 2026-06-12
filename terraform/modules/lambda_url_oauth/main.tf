@@ -1,6 +1,9 @@
-# OAuth proxy (KONZEPT section 9): stable API Gateway URLs for the Alexa
-# account-linking configuration; a catch-all route forwards /oauth/* to the
-# proxy Lambda, which relays to the home server resolved via the S3 beacon.
+# OAuth proxy (KONZEPT section 9): a Lambda Function URL gives the Alexa
+# account-linking configuration a stable HTTPS endpoint without an API Gateway.
+# The function transparently relays /oauth/* to the home server resolved via
+# the S3 beacon. Function URLs use payload format v2.0 — the same event/response
+# shape an HTTP API emits — so the handler code is identical either way, and
+# they carry no per-request charge (you pay only for the Lambda invocation).
 
 terraform {
   required_version = ">= 1.11"
@@ -39,6 +42,10 @@ resource "aws_lambda_function" "this" {
   timeout          = var.timeout_seconds
   memory_size      = var.memory_size_mb
 
+  # Cap the blast radius of a runaway loop: account concurrency is finite and a
+  # private OAuth flow is sequential, so a small reservation is plenty.
+  reserved_concurrent_executions = var.reserved_concurrency
+
   # The OAuth proxy never signs requests — it must not receive the shared
   # secret (least privilege, KONZEPT section 9).
   environment {
@@ -51,34 +58,18 @@ resource "aws_lambda_function" "this" {
   depends_on = [aws_cloudwatch_log_group.this]
 }
 
-resource "aws_apigatewayv2_api" "this" {
-  name          = var.api_name
-  protocol_type = "HTTP"
+# Public HTTPS endpoint for Alexa account linking. AuthType NONE because the
+# browser and Alexa reach it unauthenticated; the home server validates the
+# OAuth flow itself.
+resource "aws_lambda_function_url" "this" {
+  function_name      = aws_lambda_function.this.function_name
+  authorization_type = "NONE"
 }
 
-resource "aws_apigatewayv2_integration" "oauth" {
-  api_id                 = aws_apigatewayv2_api.this.id
-  integration_type       = "AWS_PROXY"
-  integration_uri        = aws_lambda_function.this.invoke_arn
-  payload_format_version = "2.0"
-}
-
-resource "aws_apigatewayv2_route" "oauth_proxy" {
-  api_id    = aws_apigatewayv2_api.this.id
-  route_key = "ANY /oauth/{proxy+}"
-  target    = "integrations/${aws_apigatewayv2_integration.oauth.id}"
-}
-
-resource "aws_apigatewayv2_stage" "default" {
-  api_id      = aws_apigatewayv2_api.this.id
-  name        = "$default"
-  auto_deploy = true
-}
-
-resource "aws_lambda_permission" "apigw" {
-  statement_id  = "AllowApiGatewayInvoke"
-  action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.this.function_name
-  principal     = "apigateway.amazonaws.com"
-  source_arn    = "${aws_apigatewayv2_api.this.execution_arn}/*/*"
+resource "aws_lambda_permission" "function_url" {
+  statement_id           = "AllowPublicFunctionUrl"
+  action                 = "lambda:InvokeFunctionUrl"
+  function_name          = aws_lambda_function.this.function_name
+  principal              = "*"
+  function_url_auth_type = "NONE"
 }

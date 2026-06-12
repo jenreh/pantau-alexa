@@ -44,7 +44,7 @@ Users are stored in SQLite (`aiosqlite`). Passwords are hashed with `bcrypt`. Ac
 Terraform ([terraform/](terraform/)) provisions the stable AWS front for the skill:
 
 - **Directive Lambda** ([lambda/directive_proxy/](lambda/directive_proxy/)) — resolves the home server's tunnel URL from the S3 beacon (conditional GET, ETag cached) and forwards the directive with HMAC headers.
-- **OAuth proxy** (API Gateway + [lambda/oauth_proxy/](lambda/oauth_proxy/)) — stable `/oauth/*` URLs for account linking, transparently proxied to the home server.
+- **OAuth proxy** (Lambda Function URL + [lambda/oauth_proxy/](lambda/oauth_proxy/)) — stable `/oauth/*` URLs for account linking, transparently proxied to the home server.
 - **S3 beacon bucket** — versioned, encrypted `endpoint.json`; the home server publishes its current tunnel URL.
 
 ## Phase 6 — Skill configuration & E2E assets
