@@ -74,9 +74,10 @@ _ISSUE_REF_RE = re.compile(
 _BREAKING_SUBJECT_RE = re.compile(r"^\w+(?:\([^)]+\))?!:")
 
 _SUMMARY_PROMPT = (
-    "Write the opening paragraph for the GitHub release notes of **runic {version}** "
-    "(a Python graph schema migration and OGM library for Cypher-based graph "
-    "databases like FalkorDB).\n\n"
+    "Write the opening paragraph for the GitHub release notes of **tiberio {version}** "
+    "(an Alexa Smart Home Skill backend for home automation, controlling TV via "
+    "Harmony Hub, roller blinds via HomeKit, and heating thermostats via FRITZ!Box "
+    "through a self-hosted FastAPI server).\n\n"
     "Commits since {previous_tag}:\n{commits}\n\n"
     "Instructions:\n"
     "- Start with a single punchy sentence naming the 1-2 most impactful user-facing changes by name.\n"
